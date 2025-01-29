@@ -1,0 +1,15 @@
+#pragma kernel CSMain
+
+struct VertexData
+{
+    float3 position;
+};
+
+RWStructuredBuffer<VertexData> _VertexBuffer;
+float _Offset;
+
+[numthreads(64,1,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    _VertexBuffer[id.x].position.y = _Offset;
+}
