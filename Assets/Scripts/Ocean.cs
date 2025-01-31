@@ -3,119 +3,172 @@ using System.Collections.Generic;
 using UnityEngine;
 
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
-public class Ocean : MonoBehaviour
-{
-    public int m_ResolutionOfQuad = 10;
-    public int m_PlaneLength = 10;
-    public bool m_DrawGuizmo = false;
+public class Ocean : MonoBehaviour {
+    [Header("Wave Settings")]
+    public int waveCount = 50; // Number of frequency components
+    public float significantWaveHeight = 2.0f; // Hs (m)
+    public float peakPeriod = 8.0f; // Tp (s)
+    public float timeScale = 1.0f; // Speed of time evolution
 
-    [Range(0.01f, 5.0f)]
-    public float m_Amplitude = 1.0f;
+    private float[] frequencies;
+    private float[] amplitudes;
+    private float[] phases;
+    private Vector2[] waveDirections; // Direction vectors for waves
 
-    [Range(0.01f, 3.0f)]
-    public float m_Frequency = 1.0f;
+    private float gravity = 9.81f; // Gravity constant
 
-    public Shader m_Shader;
-    private Mesh m_Mesh;
-    private Material m_Material;
-    private Vector3[] m_Vertices;
-    private Vector3[] m_Normals;
+    public int resolution = 10;
+    public int planeSize = 10;
+    public Shader shader;
 
-    void CreateWaterPlane()
-    {
-        GetComponent<MeshFilter>().mesh = m_Mesh = new Mesh();
-        m_Mesh.name = "Water";
-        int  verticesCount = m_ResolutionOfQuad * m_PlaneLength;        
-        float halfLength = m_PlaneLength * 0.5f;
-        m_Vertices = new Vector3[(verticesCount + 1) * (verticesCount + 1)];
-        Vector2[] textureCoordinates = new Vector2[m_Vertices.Length];
-        Vector4[] tangents = new Vector4[m_Vertices.Length];
+    private Mesh mesh;
+    private Material material;
+    private Vector3[] vertices;
+    private Vector3[] normals;
+
+    void CreateWaterPlane() {
+        GetComponent<MeshFilter>().mesh = mesh = new Mesh();
+        mesh.name = "Water";
+
+        int vertexCount = resolution * planeSize;
+        float halfSize = planeSize * 0.5f;
+        vertices = new Vector3[(vertexCount + 1) * (vertexCount + 1)];
+        Vector2[] uvs = new Vector2[vertices.Length];
+        Vector4[] tangents = new Vector4[vertices.Length];
         Vector4 tangent = new Vector4(1f, 0f, 0f, -1f);
-        m_Vertices = new Vector3[(verticesCount + 1) * (verticesCount + 1)];
-        for (int i = 0, x = 0; x <= verticesCount; ++x) {
-            for (int z = 0; z <= verticesCount; ++z, ++i) {
-                m_Vertices[i] = new Vector3(((float)x / verticesCount * m_PlaneLength) - halfLength, 0, ((float)z / verticesCount * m_PlaneLength) - halfLength);                                
-                textureCoordinates[i] = new Vector2((float)x / verticesCount, (float)z / verticesCount);
+
+        for (int i = 0, x = 0; x <= vertexCount; ++x) {
+            for (int z = 0; z <= vertexCount; ++z, ++i) {
+                vertices[i] = new Vector3(((float)x / vertexCount * planeSize) - halfSize, 0, ((float)z / vertexCount * planeSize) - halfSize);
+                uvs[i] = new Vector2((float)x / vertexCount, (float)z / vertexCount);
                 tangents[i] = tangent;
             }
         }
 
-        m_Mesh.vertices = m_Vertices;
-        m_Mesh.uv = textureCoordinates;
-        m_Mesh.tangents = tangents;
+        mesh.vertices = vertices;
+        mesh.uv = uvs;
+        mesh.tangents = tangents;
 
-        m_Mesh.vertices = m_Vertices;
-        int[] triangles = new int[verticesCount * verticesCount * 6];
-        for (int ti = 0, vi = 0, x = 0; x < verticesCount; ++vi, ++x) {
-            for (int z = 0; z < verticesCount; ti += 6, ++vi, ++z) {
+        int[] triangles = new int[vertexCount * vertexCount * 6];
+        for (int ti = 0, vi = 0, x = 0; x < vertexCount; ++vi, ++x) {
+            for (int z = 0; z < vertexCount; ti += 6, ++vi, ++z) {
                 triangles[ti] = vi;
                 triangles[ti + 1] = vi + 1;
-                triangles[ti + 2] = vi + verticesCount + 2;
+                triangles[ti + 2] = vi + vertexCount + 2;
                 triangles[ti + 3] = vi;
-                triangles[ti + 4] = vi + verticesCount + 2;
-                triangles[ti + 5] = vi + verticesCount + 1;
+                triangles[ti + 4] = vi + vertexCount + 2;
+                triangles[ti + 5] = vi + vertexCount + 1;
             }
         }
 
-        m_Mesh.triangles = triangles;
+        mesh.triangles = triangles;
+        mesh.RecalculateNormals();
+        normals = mesh.normals;
+    }
 
-        m_Mesh.RecalculateNormals();
-        m_Normals = m_Mesh.normals;
+    void GenerateWaveComponents() {
+        frequencies = new float[waveCount];
+        amplitudes = new float[waveCount];
+        phases = new float[waveCount];
+        waveDirections = new Vector2[waveCount];
 
+        float peakFrequency = 1.0f / peakPeriod;
+        float sigmaA = 0.07f, sigmaB = 0.09f;
+        float gamma = 3.3f;
 
+        System.Random random = new System.Random();
+
+        for (int i = 0; i < waveCount; i++) {
+            // Generate wave frequencies around the peak frequency
+            float fMin = peakFrequency / 2f;
+            float fMax = peakFrequency * 3f;
+            float f = fMin + (float)random.NextDouble() * (fMax - fMin);
+
+            // Compute JONSWAP spectrum
+            float sigma = (f <= peakFrequency) ? sigmaA : sigmaB;
+            float alpha = 0.0081f;
+            float S_f = alpha * gravity * gravity * Mathf.Pow(f, -5) * Mathf.Exp(-5.0f / 4.0f * Mathf.Pow(peakFrequency / f, 4));
+            float gammaFactor = Mathf.Exp(-Mathf.Pow(f - peakFrequency, 2) / (2.0f * sigma * sigma * peakFrequency * peakFrequency));
+            float Jonswap = S_f * Mathf.Pow(gamma, gammaFactor);
+
+            // Convert spectral density to wave amplitude
+            frequencies[i] = f;
+            amplitudes[i] = Mathf.Sqrt(2 * Jonswap * (fMax - fMin) / waveCount);
+            phases[i] = UnityEngine.Random.Range(0f, 2f * Mathf.PI);
+
+            // Generate a random 2D direction for the wave
+            float angle = UnityEngine.Random.Range(0f, 2f * Mathf.PI);
+            waveDirections[i] = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+        }
+
+        // Normalize amplitudes based on significant wave height
+        float totalEnergy = 0;
+        for (int i = 0; i < waveCount; i++)
+            totalEnergy += amplitudes[i] * amplitudes[i];
+
+        float A0 = Mathf.Sqrt(2) * significantWaveHeight / Mathf.Sqrt(totalEnergy);
+        for (int i = 0; i < waveCount; i++)
+            amplitudes[i] *= A0;
+    }
+
+    float ComputeWaveHeight(Vector2 position, float time) {
+        float height = 0;
+
+        for (int i = 0; i < waveCount; i++) {
+            float waveNumber = 2 * Mathf.PI * frequencies[i] / gravity;
+            Vector2 direction = waveDirections[i];
+
+            float dotProduct = Vector2.Dot(direction, position);
+            height += amplitudes[i] * Mathf.Cos(waveNumber * dotProduct + 2 * Mathf.PI * frequencies[i] * time + phases[i]);
+        }
+
+        return height;
     }
 
     void CreateMaterial() {
-        if (m_Shader == null) return;
-        if (m_Material != null) return;
+        if (shader == null) return;
+        if (material != null) return;
 
-        m_Material = new Material(m_Shader);
+        material = new Material(shader);
         MeshRenderer renderer = GetComponent<MeshRenderer>();
-
-        renderer.material = m_Material;
+        renderer.material = material;
     }
-
 
     private void OnEnable() {
         CreateWaterPlane();
         CreateMaterial();
+        GenerateWaveComponents();
     }
-    void UpdateVerticesCPU() {
-        if (m_Vertices != null) {
-            for (int i = 0; i < m_Vertices.Length; ++i) {
-                Vector3 v = m_Vertices[i];
 
-                v.y = Mathf.Sin(m_Frequency* (v.x+v.z) + Time.time) * m_Amplitude;
-                m_Vertices[i] = v;
+    void UpdateVerticesCPU() {
+        if (vertices != null) {
+            for (int i = 0; i < vertices.Length; ++i) {
+                Vector3 v = vertices[i];
+                Vector2 posXZ = new Vector2(v.x, v.z);
+
+                v.y = ComputeWaveHeight(posXZ, Time.time * timeScale);
+                vertices[i] = v;
             }
 
-            m_Mesh.vertices = m_Vertices;
-            m_Mesh.RecalculateNormals();
-
-
+            mesh.vertices = vertices;
+            mesh.RecalculateNormals();
         }
     }
+
     void Update() {
         UpdateVerticesCPU();
     }
+
     void OnDisable() {
-        if (m_Material != null) {
-            Destroy(m_Material);
-            m_Material = null;
+        if (material != null) {
+            Destroy(material);
+            material = null;
         }
 
-        if (m_Mesh != null) {
-            Destroy(m_Mesh);
-            m_Mesh = null;
-            m_Vertices = null;
-        }
-    }
-    private void OnDrawGizmos() {
-        if (m_Vertices == null) return;
-        if (m_DrawGuizmo) {
-            Gizmos.color = Color.white;
-            for (int i = 0; i < m_Vertices.Length; ++i)
-                Gizmos.DrawSphere(transform.TransformPoint(m_Vertices[i]), 0.1f);
+        if (mesh != null) {
+            Destroy(mesh);
+            mesh = null;
+            vertices = null;
         }
     }
 }
