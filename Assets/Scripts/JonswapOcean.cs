@@ -21,7 +21,7 @@ public class JonswapOcean : MonoBehaviour {
 
     private float gravity = 9.81f; // Gravity constant
 
-    void OnEnable() {
+    void Start() {
         // Create a procedural plane mesh
         CreateMesh();
 

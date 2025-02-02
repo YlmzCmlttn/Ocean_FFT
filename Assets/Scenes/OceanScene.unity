@@ -248,12 +248,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3713f0ac1e487824e9049c31726ca748, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_ResolutionOfQuad: 10
-  m_PlaneLength: 10
-  m_DrawGuizmo: 0
-  m_Amplitude: 1
-  m_Frequency: 1
-  m_Shader: {fileID: 4800000, guid: 44d5a78bb5869ac4ab4bd1e8f946a8fa, type: 3}
+  waveCount: 50
+  significantWaveHeight: 2
+  peakPeriod: 8
+  timeScale: 1
+  resolution: 10
+  planeSize: 10
+  shader: {fileID: 4800000, guid: 44d5a78bb5869ac4ab4bd1e8f946a8fa, type: 3}
 --- !u!23 &453426267
 MeshRenderer:
   m_ObjectHideFlags: 0

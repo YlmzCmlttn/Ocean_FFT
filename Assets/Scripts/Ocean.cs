@@ -5,17 +5,13 @@ using UnityEngine;
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
 public class Ocean : MonoBehaviour {
     [Header("Wave Settings")]
-    public int waveCount = 50; // Number of frequency components
-    public float significantWaveHeight = 2.0f; // Hs (m)
-    public float peakPeriod = 8.0f; // Tp (s)
-    public float timeScale = 1.0f; // Speed of time evolution
 
-    private float[] frequencies;
-    private float[] amplitudes;
-    private float[] phases;
-    private Vector2[] waveDirections; // Direction vectors for waves
+    [Range(0.01f, 5.0f)]
+    public float amplitude = 1.0f;
 
-    private float gravity = 9.81f; // Gravity constant
+    [Range(0.01f, 3.0f)]
+    public float frequency = 1.0f;
+
 
     public int resolution = 10;
     public int planeSize = 10;
@@ -66,64 +62,6 @@ public class Ocean : MonoBehaviour {
         normals = mesh.normals;
     }
 
-    void GenerateWaveComponents() {
-        frequencies = new float[waveCount];
-        amplitudes = new float[waveCount];
-        phases = new float[waveCount];
-        waveDirections = new Vector2[waveCount];
-
-        float peakFrequency = 1.0f / peakPeriod;
-        float sigmaA = 0.07f, sigmaB = 0.09f;
-        float gamma = 3.3f;
-
-        System.Random random = new System.Random();
-
-        for (int i = 0; i < waveCount; i++) {
-            // Generate wave frequencies around the peak frequency
-            float fMin = peakFrequency / 2f;
-            float fMax = peakFrequency * 3f;
-            float f = fMin + (float)random.NextDouble() * (fMax - fMin);
-
-            // Compute JONSWAP spectrum
-            float sigma = (f <= peakFrequency) ? sigmaA : sigmaB;
-            float alpha = 0.0081f;
-            float S_f = alpha * gravity * gravity * Mathf.Pow(f, -5) * Mathf.Exp(-5.0f / 4.0f * Mathf.Pow(peakFrequency / f, 4));
-            float gammaFactor = Mathf.Exp(-Mathf.Pow(f - peakFrequency, 2) / (2.0f * sigma * sigma * peakFrequency * peakFrequency));
-            float Jonswap = S_f * Mathf.Pow(gamma, gammaFactor);
-
-            // Convert spectral density to wave amplitude
-            frequencies[i] = f;
-            amplitudes[i] = Mathf.Sqrt(2 * Jonswap * (fMax - fMin) / waveCount);
-            phases[i] = UnityEngine.Random.Range(0f, 2f * Mathf.PI);
-
-            // Generate a random 2D direction for the wave
-            float angle = UnityEngine.Random.Range(0f, 2f * Mathf.PI);
-            waveDirections[i] = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-        }
-
-        // Normalize amplitudes based on significant wave height
-        float totalEnergy = 0;
-        for (int i = 0; i < waveCount; i++)
-            totalEnergy += amplitudes[i] * amplitudes[i];
-
-        float A0 = Mathf.Sqrt(2) * significantWaveHeight / Mathf.Sqrt(totalEnergy);
-        for (int i = 0; i < waveCount; i++)
-            amplitudes[i] *= A0;
-    }
-
-    float ComputeWaveHeight(Vector2 position, float time) {
-        float height = 0;
-
-        for (int i = 0; i < waveCount; i++) {
-            float waveNumber = 2 * Mathf.PI * frequencies[i] / gravity;
-            Vector2 direction = waveDirections[i];
-
-            float dotProduct = Vector2.Dot(direction, position);
-            height += amplitudes[i] * Mathf.Cos(waveNumber * dotProduct + 2 * Mathf.PI * frequencies[i] * time + phases[i]);
-        }
-
-        return height;
-    }
 
     void CreateMaterial() {
         if (shader == null) return;
@@ -137,21 +75,26 @@ public class Ocean : MonoBehaviour {
     private void OnEnable() {
         CreateWaterPlane();
         CreateMaterial();
-        GenerateWaveComponents();
     }
 
     void UpdateVerticesCPU() {
         if (vertices != null) {
             for (int i = 0; i < vertices.Length; ++i) {
-                Vector3 v = vertices[i];
-                Vector2 posXZ = new Vector2(v.x, v.z);
+                Vector3 v = transform.TransformPoint(vertices[i]);
 
-                v.y = ComputeWaveHeight(posXZ, Time.time * timeScale);
-                vertices[i] = v;
+                float h = Mathf.Sin(frequency * (v.x + v.z) + Time.time) * amplitude;
+                vertices[i].y = h;
+
+                float dx = frequency * amplitude * Mathf.Cos((v.x + v.z) * frequency + Time.time);
+                float dy = frequency * amplitude * Mathf.Cos((v.x + v.z) * frequency + Time.time);
+                Vector3 n = new Vector3(-dx, 1, -dy);
+                n.Normalize();
+
+                normals[i] = n;
             }
 
             mesh.vertices = vertices;
-            mesh.RecalculateNormals();
+            mesh.normals = normals;
         }
     }
 
@@ -169,6 +112,16 @@ public class Ocean : MonoBehaviour {
             Destroy(mesh);
             mesh = null;
             vertices = null;
+        }
+    }
+    private void OnDrawGizmos() {
+        if (vertices == null) return;
+
+        for (int i = 0; i < vertices.Length; ++i) {
+            Gizmos.color = Color.black;
+            Gizmos.DrawSphere(transform.TransformPoint(vertices[i]), 0.1f);
+            Gizmos.color = Color.yellow;
+            Gizmos.DrawRay(transform.TransformPoint(vertices[i]), normals[i]);
         }
     }
 }
