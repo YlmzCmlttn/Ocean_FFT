@@ -228,7 +228,7 @@ GameObject:
   - component: {fileID: 453426269}
   - component: {fileID: 453426268}
   - component: {fileID: 453426267}
-  - component: {fileID: 453426266}
+  - component: {fileID: 453426270}
   m_Layer: 0
   m_Name: Ocean
   m_TagString: Untagged
@@ -236,25 +236,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &453426266
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 453426265}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3713f0ac1e487824e9049c31726ca748, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  waveCount: 50
-  significantWaveHeight: 2
-  peakPeriod: 8
-  timeScale: 1
-  resolution: 10
-  planeSize: 10
-  shader: {fileID: 4800000, guid: 44d5a78bb5869ac4ab4bd1e8f946a8fa, type: 3}
 --- !u!23 &453426267
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -319,6 +300,47 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &453426270
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 453426265}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3713f0ac1e487824e9049c31726ca748, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  waveFunction: 0
+  waveType: 0
+  direction1: 0
+  origin1: {x: 0, y: 0}
+  speed1: 1
+  amplitude1: 1
+  wavelength1: 1
+  steepness1: 1
+  direction2: 0
+  origin2: {x: 0, y: 0}
+  speed2: 1
+  amplitude2: 1
+  wavelength2: 1
+  steepness2: 1
+  direction3: 0
+  origin3: {x: 0, y: 0}
+  speed3: 1
+  amplitude3: 1
+  wavelength3: 1
+  steepness3: 1
+  direction4: 0
+  origin4: {x: 0, y: 0}
+  speed4: 1
+  amplitude4: 1
+  wavelength4: 1
+  steepness4: 1
+  resolution: 10
+  planeSize: 10
+  shader: {fileID: 4800000, guid: 44d5a78bb5869ac4ab4bd1e8f946a8fa, type: 3}
 --- !u!1 &1276858841
 GameObject:
   m_ObjectHideFlags: 0
