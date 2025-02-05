@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using static System.Runtime.InteropServices.Marshal;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
 public class Ocean : MonoBehaviour {
@@ -67,10 +68,87 @@ public class Ocean : MonoBehaviour {
     private Vector3[] displacedNormals;
 
     public bool usingVertexDisplacement = true;
+    public bool usingPixelShaderNormals = true;
+    public bool usingCircularWaves = false;
+    public bool randomGeneration = false;
+
+    public float medianWavelength = 1.0f;
+    public float wavelengthRange = 1.0f;
+    public float medianDirection = 0.0f;
+    public float directionalRange = 30.0f;
+    public float medianAmplitude = 1.0f;
+    public float medianSpeed = 1.0f;
+    public float speedRange = 0.1f;
+    public float steepness = 0.0f;
+
+    [ColorUsageAttribute(false, true)]
+    public Color ambient;
+    [ColorUsageAttribute(false, true)]
+    public Color diffuseReflectance;
+    [ColorUsageAttribute(false, true)]
+    public Color specularReflectance;
+    public float shininess;
+    [ColorUsageAttribute(false, true)]
+    public Color fresnelColor;
+
+    public float fresnelBias, fresnelStrength, fresnelShininess;
+
+
+    public void ToggleCircularWaves() {
+        if (!Application.isPlaying) {
+            Debug.Log("Not in play mode!");
+            return;
+        }
+
+        usingCircularWaves = !usingCircularWaves;
+
+        if (usingCircularWaves) {
+            material.EnableKeyword("CIRCULAR_WAVES");
+        } else {
+            material.DisableKeyword("CIRCULAR_WAVES");
+        }
+    }
+
+    public void ToggleRandom() {
+        if (!Application.isPlaying) {
+            Debug.Log("Not in play mode!");
+            return;
+        }
+
+        randomGeneration = !randomGeneration;
+        if (randomGeneration) GenerateNewWaves();
+    }
+    public void GenerateNewWaves() {
+        float wavelengthMin = medianWavelength / (1.0f + wavelengthRange);
+        float wavelengthMax = medianWavelength * (1.0f + wavelengthRange);
+        float directionMin = medianDirection - directionalRange;
+        float directionMax = medianDirection + directionalRange;
+        float speedMin = Mathf.Max(0.01f, medianSpeed - speedRange);
+        float speedMax = medianSpeed + speedRange;
+        float ampOverLen = medianAmplitude / medianWavelength;
+        float halfPlaneWidth = planeSize * 0.5f;
+        Vector3 minPoint = transform.TransformPoint(new Vector3(-halfPlaneWidth, 0.0f, -halfPlaneWidth));
+        Vector3 maxPoint = transform.TransformPoint(new Vector3(halfPlaneWidth, 0.0f, halfPlaneWidth));
+
+        for (int wi = 0; wi < 4; ++wi) {
+            float wavelength = UnityEngine.Random.Range(wavelengthMin, wavelengthMax);
+            float direction = UnityEngine.Random.Range(directionMin, directionMax);
+            float amplitude = wavelength * ampOverLen;
+            float speed = UnityEngine.Random.Range(speedMin, speedMax);
+            Vector2 origin = new Vector2(UnityEngine.Random.Range(minPoint.x * 2, maxPoint.x * 2), UnityEngine.Random.Range(minPoint.x * 2, maxPoint.x * 2));
+
+
+            waves[wi] = new Wave(wavelength, amplitude, speed, direction, steepness, waveType, origin, waveFunction);
+        }
+
+        waveBuffer.SetData(waves);
+        material.SetBuffer("_Waves", waveBuffer);
+    }
 
     void CreateWaterPlane() {
         GetComponent<MeshFilter>().mesh = mesh = new Mesh();
         mesh.name = "Water";
+        mesh.indexFormat = IndexFormat.UInt32;
 
         int vertexCount = resolution * planeSize;
         float halfSize = planeSize * 0.5f;
@@ -173,6 +251,13 @@ public class Ocean : MonoBehaviour {
         } else {
             material.DisableKeyword("USE_VERTEX_DISPLACEMENT");
         }
+
+        if (usingCircularWaves) {
+            material.EnableKeyword("CIRCULAR_WAVES");
+        } else {
+            material.DisableKeyword("CIRCULAR_WAVES");
+        }
+
         MeshRenderer renderer = GetComponent<MeshRenderer>();
         renderer.material = material;
     }
@@ -189,12 +274,25 @@ public class Ocean : MonoBehaviour {
             material.EnableKeyword("USE_VERTEX_DISPLACEMENT");
             mesh.vertices = vertices;
             mesh.normals = normals;
-            Debug.Log("Toggled GPU Vertex Displacement");
         } else {
             material.DisableKeyword("USE_VERTEX_DISPLACEMENT");
             mesh.vertices = displacedVertices;
             mesh.normals = displacedNormals;
-            Debug.Log("Toggled CPU Vertex Displacement");
+        }
+    }
+
+    public void ToggleNormalGeneration() {
+        if (!Application.isPlaying) {
+            Debug.Log("Not in play mode!");
+            return;
+        }
+
+        usingPixelShaderNormals = !usingPixelShaderNormals;
+
+        if (usingPixelShaderNormals) {
+            material.EnableKeyword("NORMALS_IN_PIXEL_SHADER");
+        } else {
+            material.DisableKeyword("NORMALS_IN_PIXEL_SHADER");
         }
     }
 
@@ -268,9 +366,21 @@ public class Ocean : MonoBehaviour {
         material.SetBuffer("_Waves", waveBuffer);
     }
 
-        void Update() {
+    void Update() {
+        material.SetVector("_Ambient", ambient);
+        material.SetVector("_DiffuseReflectance", diffuseReflectance);
+        material.SetVector("_SpecularReflectance", specularReflectance);
+        material.SetVector("_FresnelColor", fresnelColor);
+        material.SetFloat("_Shininess", shininess * 100);
+        material.SetFloat("_FresnelBias", fresnelBias);
+        material.SetFloat("_FresnelStrength", fresnelStrength);
+        material.SetFloat("_FresnelShininess", fresnelShininess);
         if (usingVertexDisplacement) {
             if (updateStatics) {
+                if (randomGeneration) {
+                    material.SetBuffer("_Waves", waveBuffer);
+                    return;
+                }
                 waves[0] = new Wave(wavelength1, amplitude1, speed1, direction1, steepness1, waveType, origin1, waveFunction);
                 waves[1] = new Wave(wavelength2, amplitude2, speed2, direction2, steepness2, waveType, origin2, waveFunction);
                 waves[2] = new Wave(wavelength3, amplitude3, speed3, direction3, steepness3, waveType, origin3, waveFunction);

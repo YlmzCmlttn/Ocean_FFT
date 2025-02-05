@@ -314,33 +314,46 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   waveFunction: 0
   waveType: 0
+  updateStatics: 1
   direction1: 0
   origin1: {x: 0, y: 0}
   speed1: 1
-  amplitude1: 1
+  amplitude1: 0.1
   wavelength1: 1
   steepness1: 1
   direction2: 0
   origin2: {x: 0, y: 0}
   speed2: 1
-  amplitude2: 1
+  amplitude2: 0.1
   wavelength2: 1
   steepness2: 1
   direction3: 0
   origin3: {x: 0, y: 0}
   speed3: 1
-  amplitude3: 1
+  amplitude3: 0.1
   wavelength3: 1
   steepness3: 1
   direction4: 0
   origin4: {x: 0, y: 0}
   speed4: 1
-  amplitude4: 1
+  amplitude4: 0.1
   wavelength4: 1
   steepness4: 1
   resolution: 10
   planeSize: 10
   shader: {fileID: 4800000, guid: 44d5a78bb5869ac4ab4bd1e8f946a8fa, type: 3}
+  usingVertexDisplacement: 1
+  usingPixelShaderNormals: 1
+  usingCircularWaves: 0
+  randomGeneration: 0
+  medianWavelength: 1
+  wavelengthRange: 1
+  medianDirection: 0
+  directionalRange: 30
+  medianAmplitude: 1
+  medianSpeed: 1
+  speedRange: 0.1
+  steepness: 0
 --- !u!1 &1276858841
 GameObject:
   m_ObjectHideFlags: 0
@@ -426,13 +439,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1276858841}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalRotation: {x: 0.24310715, y: 0, z: 0, w: 0.9699995}
+  m_LocalPosition: {x: 0, y: 6.14, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 28.14, y: 0, z: 0}
 --- !u!1 &1678588723
 GameObject:
   m_ObjectHideFlags: 0

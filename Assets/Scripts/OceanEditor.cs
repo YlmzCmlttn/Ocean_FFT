@@ -22,6 +22,9 @@ public class OceanEditor : Editor {
     private float steepnessMax = 10.0f;
 
     private bool usingVertexDisplacement = false;
+    private bool usingPixelShaderNormals = false;
+    private bool usingCircularWaves = false;
+    private bool randomGeneration = false;
 
     private Ocean.WaveFunction waveFunction = Ocean.WaveFunction.Sine;
 
@@ -37,6 +40,20 @@ public class OceanEditor : Editor {
     SerializedProperty amplitude1, amplitude2, amplitude3, amplitude4;
     SerializedProperty wavelength1, wavelength2, wavelength3, wavelength4;
     SerializedProperty steepness1, steepness2, steepness3, steepness4;
+    SerializedProperty medianWavelength, wavelengthRange;
+    SerializedProperty medianSpeed, speedRange;
+    SerializedProperty medianDirection, directionalRange;
+    SerializedProperty medianAmplitude;
+    SerializedProperty steepness;
+    SerializedProperty ambient;
+    SerializedProperty diffuseReflectance;
+    SerializedProperty specularReflectance;
+    SerializedProperty shininess;
+    SerializedProperty fresnelColor;
+    SerializedProperty fresnelBias;
+    SerializedProperty fresnelShininess;
+    SerializedProperty fresnelStrength;
+
 
     void OnEnable() {
         oceanShader = serializedObject.FindProperty("shader");
@@ -67,7 +84,23 @@ public class OceanEditor : Editor {
         steepness1 = serializedObject.FindProperty("steepness1");
         steepness2 = serializedObject.FindProperty("steepness2");
         steepness3 = serializedObject.FindProperty("steepness3");
-        steepness4 = serializedObject.FindProperty("steepness4");
+        steepness4 = serializedObject.FindProperty("steepness4"); 
+        medianWavelength = serializedObject.FindProperty("medianWavelength");
+        wavelengthRange = serializedObject.FindProperty("wavelengthRange");
+        medianDirection = serializedObject.FindProperty("medianDirection");
+        directionalRange = serializedObject.FindProperty("directionalRange");
+        medianAmplitude = serializedObject.FindProperty("medianAmplitude");
+        medianSpeed = serializedObject.FindProperty("medianSpeed");
+        speedRange = serializedObject.FindProperty("speedRange");
+        steepness = serializedObject.FindProperty("steepness");
+        ambient = serializedObject.FindProperty("ambient");
+        diffuseReflectance = serializedObject.FindProperty("diffuseReflectance");
+        specularReflectance = serializedObject.FindProperty("specularReflectance");
+        shininess = serializedObject.FindProperty("shininess");
+        fresnelColor = serializedObject.FindProperty("fresnelColor");
+        fresnelBias = serializedObject.FindProperty("fresnelBias");
+        fresnelStrength = serializedObject.FindProperty("fresnelStrength");
+        fresnelShininess = serializedObject.FindProperty("fresnelShininess");
     }
 
     public override void OnInspectorGUI() {
@@ -98,46 +131,102 @@ public class OceanEditor : Editor {
             EditorGUILayout.PropertyField(updateStatics);
         }
         EditorGUILayout.Space();
+        usingPixelShaderNormals = ((Ocean)target).usingPixelShaderNormals;
+        if (GUILayout.Button("Using Pixel Shader Normals: " + usingPixelShaderNormals.ToString())) {
+            Ocean water = (Ocean)target;
+            water.ToggleNormalGeneration();
+        }
+        EditorGUILayout.Space();
 
-        EditorGUI.indentLevel--;
-        EditorGUILayout.LabelField("Wave One", EditorStyles.boldLabel);
-        EditorGUI.indentLevel++;
-        EditorGUILayout.Slider(direction1, 0.0f, 360.0f, new GUIContent("Direction"));
-        EditorGUILayout.PropertyField(origin1, new GUIContent("Origin"));
-        EditorGUILayout.Slider(speed1, speedMin, speedMax, new GUIContent("Speed"));
-        EditorGUILayout.Slider(amplitude1, amplitudeMin, amplitudeMax, new GUIContent("Amplitude"));
-        EditorGUILayout.Slider(wavelength1, wavelengthMin, wavelengthMax, new GUIContent("Wavelength"));
-        EditorGUILayout.Slider(steepness1, steepnessMin, steepnessMax, new GUIContent("Steepness"));
+        usingCircularWaves = ((Ocean)target).usingCircularWaves;
+        if (GUILayout.Button("Using Circular Waves: " + usingCircularWaves.ToString())) {
+            Ocean water = (Ocean)target;
+            water.ToggleCircularWaves();
+        }
         EditorGUILayout.Space();
-        EditorGUI.indentLevel--;
-        EditorGUILayout.LabelField("Wave Two", EditorStyles.boldLabel);
-        EditorGUI.indentLevel++;
-        EditorGUILayout.Slider(direction2, 0.0f, 360.0f, new GUIContent("Direction"));
-        EditorGUILayout.PropertyField(origin2, new GUIContent("Origin"));
-        EditorGUILayout.Slider(speed2, speedMin, speedMax, new GUIContent("Speed"));
-        EditorGUILayout.Slider(amplitude2, amplitudeMin, amplitudeMax, new GUIContent("Amplitude"));
-        EditorGUILayout.Slider(wavelength2, wavelengthMin, wavelengthMax, new GUIContent("Wavelength"));
-        EditorGUILayout.Slider(steepness2, steepnessMin, steepnessMax, new GUIContent("Steepness"));
+
+        randomGeneration = ((Ocean)target).randomGeneration;
+        if (GUILayout.Button("Procedurally Generate: " + randomGeneration.ToString())) {
+            Ocean water = (Ocean)target;
+            water.ToggleRandom();
+        }
         EditorGUILayout.Space();
+
+        if (randomGeneration) {
+            EditorGUI.indentLevel--;
+            EditorGUILayout.LabelField("Procedural Settings", EditorStyles.boldLabel);
+            EditorGUI.indentLevel++;
+
+            EditorGUILayout.Slider(medianWavelength, 0.0f, 3.0f, new GUIContent("Median Wavelength"));
+            EditorGUILayout.Slider(wavelengthRange, 0.0f, 2.0f, new GUIContent("Wavelength Range"));
+            EditorGUILayout.Slider(medianDirection, 0.0f, 360.0f, new GUIContent("Median Direction"));
+            EditorGUILayout.Slider(directionalRange, 0.0f, 360.0f, new GUIContent("Directional Range"));
+            EditorGUILayout.Slider(medianAmplitude, 0.0f, 3.0f, new GUIContent("Median Amplitude"));
+            EditorGUILayout.Slider(medianSpeed, 0.0f, 2.0f, new GUIContent("Median Speed"));
+            EditorGUILayout.Slider(speedRange, 0.0f, 1.0f, new GUIContent("Speed Range"));
+
+            if (waveFunction == Ocean.WaveFunction.SteepSine) {
+                EditorGUILayout.Slider(steepness, 1.0f, 10.0f, new GUIContent("Steepness"));
+            } else if (waveFunction == Ocean.WaveFunction.Gerstner) {
+                EditorGUILayout.Slider(steepness, 0.0f, 1.0f, new GUIContent("Steepness"));
+            }
+            if (GUILayout.Button("Regenerate Waves")) {
+                Ocean water = (Ocean)target;
+                water.GenerateNewWaves();
+            }
+
+        } else {
+            EditorGUI.indentLevel--;
+            EditorGUILayout.LabelField("Wave One", EditorStyles.boldLabel);
+            EditorGUI.indentLevel++;
+            EditorGUILayout.Slider(direction1, 0.0f, 360.0f, new GUIContent("Direction"));
+            EditorGUILayout.PropertyField(origin1, new GUIContent("Origin"));
+            EditorGUILayout.Slider(speed1, speedMin, speedMax, new GUIContent("Speed"));
+            EditorGUILayout.Slider(amplitude1, amplitudeMin, amplitudeMax, new GUIContent("Amplitude"));
+            EditorGUILayout.Slider(wavelength1, wavelengthMin, wavelengthMax, new GUIContent("Wavelength"));
+            EditorGUILayout.Slider(steepness1, steepnessMin, steepnessMax, new GUIContent("Steepness"));
+            EditorGUILayout.Space();
+            EditorGUI.indentLevel--;
+            EditorGUILayout.LabelField("Wave Two", EditorStyles.boldLabel);
+            EditorGUI.indentLevel++;
+            EditorGUILayout.Slider(direction2, 0.0f, 360.0f, new GUIContent("Direction"));
+            EditorGUILayout.PropertyField(origin2, new GUIContent("Origin"));
+            EditorGUILayout.Slider(speed2, speedMin, speedMax, new GUIContent("Speed"));
+            EditorGUILayout.Slider(amplitude2, amplitudeMin, amplitudeMax, new GUIContent("Amplitude"));
+            EditorGUILayout.Slider(wavelength2, wavelengthMin, wavelengthMax, new GUIContent("Wavelength"));
+            EditorGUILayout.Slider(steepness2, steepnessMin, steepnessMax, new GUIContent("Steepness"));
+            EditorGUILayout.Space();
+            EditorGUI.indentLevel--;
+            EditorGUILayout.LabelField("Wave Three", EditorStyles.boldLabel);
+            EditorGUI.indentLevel++;
+            EditorGUILayout.Slider(direction3, 0.0f, 360.0f, new GUIContent("Direction"));
+            EditorGUILayout.PropertyField(origin3, new GUIContent("Origin"));
+            EditorGUILayout.Slider(speed3, speedMin, speedMax, new GUIContent("Speed"));
+            EditorGUILayout.Slider(amplitude3, amplitudeMin, amplitudeMax, new GUIContent("Amplitude"));
+            EditorGUILayout.Slider(wavelength3, wavelengthMin, wavelengthMax, new GUIContent("Wavelength"));
+            EditorGUILayout.Slider(steepness3, steepnessMin, steepnessMax, new GUIContent("Steepness"));
+            EditorGUILayout.Space();
+            EditorGUI.indentLevel--;
+            EditorGUILayout.LabelField("Wave Four", EditorStyles.boldLabel);
+            EditorGUI.indentLevel++;
+            EditorGUILayout.Slider(direction4, 0.0f, 360.0f, new GUIContent("Direction"));
+            EditorGUILayout.PropertyField(origin4, new GUIContent("Origin"));
+            EditorGUILayout.Slider(speed4, speedMin, speedMax, new GUIContent("Speed"));
+            EditorGUILayout.Slider(amplitude4, amplitudeMin, amplitudeMax, new GUIContent("Amplitude"));
+            EditorGUILayout.Slider(wavelength4, wavelengthMin, wavelengthMax, new GUIContent("Wavelength"));
+            EditorGUILayout.Slider(steepness4, steepnessMin, steepnessMax, new GUIContent("Steepness"));
+        }
         EditorGUI.indentLevel--;
-        EditorGUILayout.LabelField("Wave Three", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("Material Settings", EditorStyles.boldLabel);
         EditorGUI.indentLevel++;
-        EditorGUILayout.Slider(direction3, 0.0f, 360.0f, new GUIContent("Direction"));
-        EditorGUILayout.PropertyField(origin3, new GUIContent("Origin"));
-        EditorGUILayout.Slider(speed3, speedMin, speedMax, new GUIContent("Speed"));
-        EditorGUILayout.Slider(amplitude3, amplitudeMin, amplitudeMax, new GUIContent("Amplitude"));
-        EditorGUILayout.Slider(wavelength3, wavelengthMin, wavelengthMax, new GUIContent("Wavelength"));
-        EditorGUILayout.Slider(steepness3, steepnessMin, steepnessMax, new GUIContent("Steepness"));
-        EditorGUILayout.Space();
-        EditorGUI.indentLevel--;
-        EditorGUILayout.LabelField("Wave Four", EditorStyles.boldLabel);
-        EditorGUI.indentLevel++;
-        EditorGUILayout.Slider(direction4, 0.0f, 360.0f, new GUIContent("Direction"));
-        EditorGUILayout.PropertyField(origin4, new GUIContent("Origin"));
-        EditorGUILayout.Slider(speed4, speedMin, speedMax, new GUIContent("Speed"));
-        EditorGUILayout.Slider(amplitude4, amplitudeMin, amplitudeMax, new GUIContent("Amplitude"));
-        EditorGUILayout.Slider(wavelength4, wavelengthMin, wavelengthMax, new GUIContent("Wavelength"));
-        EditorGUILayout.Slider(steepness4, steepnessMin, steepnessMax, new GUIContent("Steepness"));
+        EditorGUILayout.PropertyField(ambient);
+        EditorGUILayout.PropertyField(diffuseReflectance);
+        EditorGUILayout.PropertyField(specularReflectance);
+        EditorGUILayout.Slider(shininess, 0.0f, 100.0f, new GUIContent("Shininess"));
+        EditorGUILayout.PropertyField(fresnelColor);
+        EditorGUILayout.Slider(fresnelBias, 0.0f, 1.0f, new GUIContent("Fresnel Bias"));
+        EditorGUILayout.Slider(fresnelStrength, 0.0f, 1.0f, new GUIContent("Fresnel Strength"));
+        EditorGUILayout.Slider(fresnelShininess, 0.0f, 20.0f, new GUIContent("Fresnel Shininess"));
 
         serializedObject.ApplyModifiedProperties();
     }

@@ -15,10 +15,10 @@ public struct Wave {
     public Wave(float wavelength, float amplitude, float speed, float direction, float steepness, WaveType waveType, Vector2 origin, WaveFunction waveFunction) {
         this.frequency = 2.0f / wavelength;
         this.amplitude = amplitude;
-        this.phase = speed * 2.0f / wavelength;
+        this.phase = speed * Mathf.Sqrt(9.8f * 2.0f * Mathf.PI / wavelength); ;
 
         if (waveFunction == WaveFunction.Gerstner)
-            this.steepness = (steepness - 1) / this.frequency * this.amplitude * 4.0f;
+            this.steepness = steepness / this.frequency * this.amplitude * 4.0f;
         else
             this.steepness = steepness;
 
@@ -35,7 +35,6 @@ public struct Wave {
         if (waveType == WaveType.Circular) {
             Vector2 p = new Vector2(v.x, v.z);
 
-            Vector2 heading = p - this.origin;
             d = p - this.origin;
             d.Normalize();
         }
