@@ -61,6 +61,7 @@ public class Ocean : MonoBehaviour {
     public int resolution = 10;
     public int planeSize = 10;
     public Shader shader;
+    public Atmosphere atmosphere;
     private ComputeBuffer waveBuffer;
 
     private Mesh mesh;
@@ -127,10 +128,17 @@ public class Ocean : MonoBehaviour {
     [ColorUsageAttribute(false, true)]
     public Color specularReflectance;
     public float shininess;
+    public float specularNormalStrength = 1;
     [ColorUsageAttribute(false, true)]
     public Color fresnelColor;
 
     public float fresnelBias, fresnelStrength, fresnelShininess;
+    public float fresnelNormalStrength = 1;
+
+    [ColorUsageAttribute(false, true)]
+    public Color tipColor;
+    public float tipAttenuation;
+
     public float absorptionCoefficient;
 
 
@@ -426,13 +434,23 @@ public class Ocean : MonoBehaviour {
         material.SetVector("_Ambient", ambient);
         material.SetVector("_DiffuseReflectance", diffuseReflectance);
         material.SetVector("_SpecularReflectance", specularReflectance);
+
+        material.SetVector("_TipColor", tipColor);
         material.SetVector("_FresnelColor", fresnelColor);
         material.SetFloat("_Shininess", shininess * 100);
         material.SetFloat("_FresnelBias", fresnelBias);
         material.SetFloat("_FresnelStrength", fresnelStrength);
         material.SetFloat("_FresnelShininess", fresnelShininess);
+
+        material.SetFloat("_TipAttenuation", tipAttenuation);
         material.SetFloat("_AbsorptionCoefficient", absorptionCoefficient);
+
+        material.SetFloat("_FresnelNormalStrength", fresnelNormalStrength);
+        material.SetFloat("_SpecularNormalStrength", specularNormalStrength);
         material.SetInt("_WaveCount", waveCount);
+        if (atmosphere != null) {
+            material.SetVector("_SunDirection", atmosphere.GetSunDirection());
+        }
 
         Matrix4x4 projMatrix = GL.GetGPUProjectionMatrix(cam.projectionMatrix, false);
         Matrix4x4 viewProjMatrix = projMatrix * cam.worldToCameraMatrix;

@@ -31,6 +31,7 @@ public class OceanEditor : Editor {
 
 
     SerializedProperty oceanShader;
+    SerializedProperty atmosphere;
     SerializedProperty planeLength;
     SerializedProperty quadRes;
     SerializedProperty waveType;
@@ -55,18 +56,21 @@ public class OceanEditor : Editor {
     SerializedProperty fresnelShininess;
     SerializedProperty fresnelStrength;
     SerializedProperty absorptionCoefficient;
+    SerializedProperty tipColor;
+    SerializedProperty tipAttenuation;
 
     SerializedProperty vertexWaveCount;
     SerializedProperty fragmentWaveCount;
     SerializedProperty vertexSeed, vertexSeedIter, vertexFrequency, vertexFrequencyMult, vertexAmplitude, vertexAmplitudeMult, vertexInitialSpeed, vertexSpeedRamp, vertexDrag, vertexHeight, vertexMaxPeak, vertexPeakOffset;
     SerializedProperty fragmentSeed, fragmentSeedIter, fragmentFrequency, fragmentFrequencyMult, fragmentAmplitude, fragmentAmplitudeMult, fragmentInitialSpeed, fragmentSpeedRamp, fragmentDrag, fragmentHeight, fragmentMaxPeak, fragmentPeakOffset;
-    SerializedProperty normalStrength;
+    SerializedProperty normalStrength, fresnelNormalStrength, specularNormalStrength;
 
     SerializedProperty waveCount;
 
 
     void OnEnable() {
         oceanShader = serializedObject.FindProperty("shader");
+        atmosphere = serializedObject.FindProperty("atmosphere");
         planeLength = serializedObject.FindProperty("planeSize");
         quadRes = serializedObject.FindProperty("resolution");
         waveType = serializedObject.FindProperty("waveType");
@@ -142,6 +146,10 @@ public class OceanEditor : Editor {
         vertexWaveCount = serializedObject.FindProperty("vertexWaveCount");
         fragmentWaveCount = serializedObject.FindProperty("fragmentWaveCount");
         normalStrength = serializedObject.FindProperty("normalStrength");
+        tipColor = serializedObject.FindProperty("tipColor");
+        tipAttenuation = serializedObject.FindProperty("tipAttenuation");
+        fresnelNormalStrength = serializedObject.FindProperty("fresnelNormalStrength");
+        specularNormalStrength = serializedObject.FindProperty("specularNormalStrength");
 
 
     }
@@ -152,6 +160,7 @@ public class OceanEditor : Editor {
         EditorGUILayout.LabelField("General Settings", EditorStyles.boldLabel);
         EditorGUI.indentLevel++;
         EditorGUILayout.PropertyField(oceanShader);
+        EditorGUILayout.PropertyField(atmosphere);
         EditorGUILayout.PropertyField(planeLength);
         EditorGUILayout.PropertyField(quadRes);
         EditorGUILayout.Space();
@@ -316,10 +325,14 @@ public class OceanEditor : Editor {
         EditorGUILayout.PropertyField(diffuseReflectance);
         EditorGUILayout.PropertyField(specularReflectance);
         EditorGUILayout.Slider(shininess, 0.0f, 100.0f, new GUIContent("Shininess"));
+        EditorGUILayout.Slider(specularNormalStrength, 0.0f, 5.0f, new GUIContent("Specular Normal Strength"));
         EditorGUILayout.PropertyField(fresnelColor);
         EditorGUILayout.Slider(fresnelBias, 0.0f, 1.0f, new GUIContent("Fresnel Bias"));
         EditorGUILayout.Slider(fresnelStrength, 0.0f, 1.0f, new GUIContent("Fresnel Strength"));
         EditorGUILayout.Slider(fresnelShininess, 0.0f, 20.0f, new GUIContent("Fresnel Shininess"));
+        EditorGUILayout.Slider(fresnelNormalStrength, 0.0f, 5.0f, new GUIContent("Fresnel Normal Strength"));
+        EditorGUILayout.PropertyField(tipColor);
+        EditorGUILayout.Slider(tipAttenuation, 0.0f, 5.0f, new GUIContent("Tip Attenuation"));
         EditorGUILayout.Slider(absorptionCoefficient, 0.0f, 2.0f, new GUIContent("Absorption Coefficient"));
 
         serializedObject.ApplyModifiedProperties();

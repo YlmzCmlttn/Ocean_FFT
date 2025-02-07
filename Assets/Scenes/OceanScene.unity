@@ -445,8 +445,9 @@ MonoBehaviour:
   wavelength4: 1
   steepness4: 1
   resolution: 10
-  planeSize: 10
+  planeSize: 100
   shader: {fileID: 4800000, guid: 44d5a78bb5869ac4ab4bd1e8f946a8fa, type: 3}
+  atmosphere: {fileID: 0}
   usingVertexDisplacement: 1
   usingPixelShaderNormals: 1
   usingCircularWaves: 0
@@ -492,10 +493,14 @@ MonoBehaviour:
   diffuseReflectance: {r: 1, g: 1, b: 1, a: 0}
   specularReflectance: {r: 1, g: 1, b: 1, a: 0}
   shininess: 80
+  specularNormalStrength: 1
   fresnelColor: {r: 1, g: 1, b: 1, a: 0}
   fresnelBias: 0.02
   fresnelStrength: 1
   fresnelShininess: 5
+  fresnelNormalStrength: 1
+  tipColor: {r: 0, g: 0, b: 0, a: 0}
+  tipAttenuation: 0
   absorptionCoefficient: 0
 --- !u!1 &966846951
 GameObject:
@@ -614,6 +619,7 @@ GameObject:
   - component: {fileID: 1276858843}
   - component: {fileID: 1276858842}
   - component: {fileID: 1276858845}
+  - component: {fileID: 1276858846}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -735,6 +741,29 @@ MonoBehaviour:
     m_RotationOrder: 4
   rotationLerpTime: 0.01
   invertY: 0
+--- !u!114 &1276858846
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1276858841}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b60e39467e529dc40be4b0172a20667a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  atmosphereShader: {fileID: 4800000, guid: 1f963cd64aa348549a6ffa01e3545f50, type: 3}
+  skyboxTex: {fileID: 8900000, guid: 8a293ce833d584fc98516e0e74f495a4, type: 3}
+  skyboxDirection: {x: 0, y: -1, z: 0}
+  skyboxSpeed: 0.1
+  sunDirection: {x: 0, y: 1, z: 0}
+  sunColor: {r: 0, g: 0, b: 0, a: 0}
+  fogHeight: 500
+  fogAttenuation: 1.2
+  fogColor: {r: 0, g: 0, b: 0, a: 0}
+  fogDensity: 0
+  fogOffset: 0
 --- !u!1 &1447347933
 GameObject:
   m_ObjectHideFlags: 0
