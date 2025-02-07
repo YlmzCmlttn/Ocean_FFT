@@ -55,7 +55,7 @@ public class Ocean : MonoBehaviour {
 
 
     private Camera cam;
-    private Wave[] waves = new Wave[4];
+    private Wave[] waves = new Wave[64];
 
 
     public int resolution = 10;
@@ -74,6 +74,9 @@ public class Ocean : MonoBehaviour {
     public bool usingPixelShaderNormals = true;
     public bool usingCircularWaves = false;
     public bool randomGeneration = false;
+    public bool usingFBM = false;
+
+    public int waveCount = 4;
 
     public float medianWavelength = 1.0f;
     public float wavelengthRange = 1.0f;
@@ -83,6 +86,39 @@ public class Ocean : MonoBehaviour {
     public float medianSpeed = 1.0f;
     public float speedRange = 0.1f;
     public float steepness = 0.0f;
+
+    // FBM Settings
+    public int vertexWaveCount = 8;
+    public int fragmentWaveCount = 40;
+
+    public float vertexSeed = 0;
+    public float vertexSeedIter = 1253.2131f;
+    public float vertexFrequency = 1.0f;
+    public float vertexFrequencyMult = 1.18f;
+    public float vertexAmplitude = 1.0f;
+    public float vertexAmplitudeMult = 0.82f;
+    public float vertexInitialSpeed = 2.0f;
+    public float vertexSpeedRamp = 1.07f;
+    public float vertexDrag = 1.0f;
+    public float vertexHeight = 1.0f;
+    public float vertexMaxPeak = 1.0f;
+    public float vertexPeakOffset = 1.0f;
+    public float fragmentSeed = 0;
+    public float fragmentSeedIter = 1253.2131f;
+    public float fragmentFrequency = 1.0f;
+    public float fragmentFrequencyMult = 1.18f;
+    public float fragmentAmplitude = 1.0f;
+    public float fragmentAmplitudeMult = 0.82f;
+    public float fragmentInitialSpeed = 2.0f;
+    public float fragmentSpeedRamp = 1.07f;
+    public float fragmentDrag = 1.0f;
+    public float fragmentHeight = 1.0f;
+    public float fragmentMaxPeak = 1.0f;
+    public float fragmentPeakOffset = 1.0f;
+
+    public float normalStrength = 1;
+
+
 
     [ColorUsageAttribute(false, true)]
     public Color ambient;
@@ -95,6 +131,7 @@ public class Ocean : MonoBehaviour {
     public Color fresnelColor;
 
     public float fresnelBias, fresnelStrength, fresnelShininess;
+    public float absorptionCoefficient;
 
 
     public void ToggleCircularWaves() {
@@ -133,7 +170,7 @@ public class Ocean : MonoBehaviour {
         Vector3 minPoint = transform.TransformPoint(new Vector3(-halfPlaneWidth, 0.0f, -halfPlaneWidth));
         Vector3 maxPoint = transform.TransformPoint(new Vector3(halfPlaneWidth, 0.0f, halfPlaneWidth));
 
-        for (int wi = 0; wi < 4; ++wi) {
+        for (int wi = 0; wi < waveCount; ++wi) {
             float wavelength = UnityEngine.Random.Range(wavelengthMin, wavelengthMax);
             float direction = UnityEngine.Random.Range(directionMin, directionMax);
             float amplitude = wavelength * ampOverLen;
@@ -141,11 +178,25 @@ public class Ocean : MonoBehaviour {
             Vector2 origin = new Vector2(UnityEngine.Random.Range(minPoint.x * 2, maxPoint.x * 2), UnityEngine.Random.Range(minPoint.x * 2, maxPoint.x * 2));
 
 
-            waves[wi] = new Wave(wavelength, amplitude, speed, direction, steepness, waveType, origin, waveFunction);
+            waves[wi] = new Wave(wavelength, amplitude, speed, direction, steepness, waveType, origin, waveFunction,waveCount);
         }
 
         waveBuffer.SetData(waves);
         material.SetBuffer("_Waves", waveBuffer);
+    }
+    public void ToggleFBM() {
+        if (!Application.isPlaying) {
+            Debug.Log("Not in play mode!");
+            return;
+        }
+
+        usingFBM = !usingFBM;
+
+        if (usingFBM) {
+            material.EnableKeyword("USE_FBM");
+        } else {
+            material.DisableKeyword("USE_FBM");
+        }
     }
 
     void CreateWaterPlane() {
@@ -308,10 +359,10 @@ public class Ocean : MonoBehaviour {
     }
 
     void UpdateVerticesCPU() {
-        waves[0] = new Wave(wavelength1, amplitude1, speed1, direction1, steepness1, waveType, origin1, waveFunction);
-        waves[1] = new Wave(wavelength2, amplitude2, speed2, direction2, steepness2, waveType, origin2, waveFunction);
-        waves[2] = new Wave(wavelength3, amplitude3, speed3, direction3, steepness3, waveType, origin3, waveFunction);
-        waves[3] = new Wave(wavelength4, amplitude4, speed4, direction4, steepness4, waveType, origin4, waveFunction);
+        waves[0] = new Wave(wavelength1, amplitude1, speed1, direction1, steepness1, waveType, origin1, waveFunction,waveCount);
+        waves[1] = new Wave(wavelength2, amplitude2, speed2, direction2, steepness2, waveType, origin2, waveFunction,waveCount);
+        waves[2] = new Wave(wavelength3, amplitude3, speed3, direction3, steepness3, waveType, origin3, waveFunction,waveCount);
+        waves[3] = new Wave(wavelength4, amplitude4, speed4, direction4, steepness4, waveType, origin4, waveFunction,waveCount);
 
         if (vertices != null) {
             for (int i = 0; i < vertices.Length; ++i) {
@@ -367,7 +418,7 @@ public class Ocean : MonoBehaviour {
 
     void CreateWaveBuffer() {
         if (waveBuffer != null) return;
-        waveBuffer = new ComputeBuffer(4, SizeOf(typeof(Wave)));
+        waveBuffer = new ComputeBuffer(64, SizeOf(typeof(Wave)));
         material.SetBuffer("_Waves", waveBuffer);
     }
 
@@ -380,6 +431,8 @@ public class Ocean : MonoBehaviour {
         material.SetFloat("_FresnelBias", fresnelBias);
         material.SetFloat("_FresnelStrength", fresnelStrength);
         material.SetFloat("_FresnelShininess", fresnelShininess);
+        material.SetFloat("_AbsorptionCoefficient", absorptionCoefficient);
+        material.SetInt("_WaveCount", waveCount);
 
         Matrix4x4 projMatrix = GL.GetGPUProjectionMatrix(cam.projectionMatrix, false);
         Matrix4x4 viewProjMatrix = projMatrix * cam.worldToCameraMatrix;
@@ -388,13 +441,41 @@ public class Ocean : MonoBehaviour {
         if (usingVertexDisplacement) {
             if (updateStatics) {
                 if (randomGeneration) {
+                    material.SetInt("_VertexWaveCount", vertexWaveCount);
+                    material.SetFloat("_VertexSeed", vertexSeed);
+                    material.SetFloat("_VertexSeedIter", vertexSeedIter);
+                    material.SetFloat("_VertexFrequency", vertexFrequency);
+                    material.SetFloat("_VertexFrequencyMult", vertexFrequencyMult);
+                    material.SetFloat("_VertexAmplitude", vertexAmplitude);
+                    material.SetFloat("_VertexAmplitudeMult", vertexAmplitudeMult);
+                    material.SetFloat("_VertexInitialSpeed", vertexInitialSpeed);
+                    material.SetFloat("_VertexSpeedRamp", vertexSpeedRamp);
+                    material.SetFloat("_VertexDrag", vertexDrag);
+                    material.SetFloat("_VertexHeight", vertexHeight);
+                    material.SetFloat("_VertexMaxPeak", vertexMaxPeak);
+                    material.SetFloat("_VertexPeakOffset", vertexPeakOffset);
+                    material.SetInt("_FragmentWaveCount", fragmentWaveCount);
+                    material.SetFloat("_FragmentSeed", fragmentSeed);
+                    material.SetFloat("_FragmentSeedIter", fragmentSeedIter);
+                    material.SetFloat("_FragmentFrequency", fragmentFrequency);
+                    material.SetFloat("_FragmentFrequencyMult", fragmentFrequencyMult);
+                    material.SetFloat("_FragmentAmplitude", fragmentAmplitude);
+                    material.SetFloat("_FragmentAmplitudeMult", fragmentAmplitudeMult);
+                    material.SetFloat("_FragmentInitialSpeed", fragmentInitialSpeed);
+                    material.SetFloat("_FragmentSpeedRamp", fragmentSpeedRamp);
+                    material.SetFloat("_FragmentDrag", fragmentDrag);
+                    material.SetFloat("_FragmentHeight", fragmentHeight);
+                    material.SetFloat("_FragmentMaxPeak", fragmentMaxPeak);
+                    material.SetFloat("_FragmentPeakOffset", fragmentPeakOffset);
+                    material.SetFloat("_NormalStrength", normalStrength);
+
                     material.SetBuffer("_Waves", waveBuffer);
                     return;
                 }
-                waves[0] = new Wave(wavelength1, amplitude1, speed1, direction1, steepness1, waveType, origin1, waveFunction);
-                waves[1] = new Wave(wavelength2, amplitude2, speed2, direction2, steepness2, waveType, origin2, waveFunction);
-                waves[2] = new Wave(wavelength3, amplitude3, speed3, direction3, steepness3, waveType, origin3, waveFunction);
-                waves[3] = new Wave(wavelength4, amplitude4, speed4, direction4, steepness4, waveType, origin4, waveFunction);
+                waves[0] = new Wave(wavelength1, amplitude1, speed1, direction1, steepness1, waveType, origin1, waveFunction,waveCount);
+                waves[1] = new Wave(wavelength2, amplitude2, speed2, direction2, steepness2, waveType, origin2, waveFunction,waveCount);
+                waves[2] = new Wave(wavelength3, amplitude3, speed3, direction3, steepness3, waveType, origin3, waveFunction,waveCount);
+                waves[3] = new Wave(wavelength4, amplitude4, speed4, direction4, steepness4, waveType, origin4, waveFunction,waveCount);
 
                 waveBuffer.SetData(waves);
                 material.SetBuffer("_Waves", waveBuffer);
@@ -431,12 +512,14 @@ public class Ocean : MonoBehaviour {
     }
     private void OnDrawGizmos() {
         if (vertices == null) return;
-
+        /*
         for (int i = 0; i < vertices.Length; ++i) {
             Gizmos.color = Color.black;
             Gizmos.DrawSphere(transform.TransformPoint(displacedVertices[i]), 0.1f);
             Gizmos.color = Color.yellow;
-            Gizmos.DrawRay(transform.TransformPoint(displacedVertices[i]), normals[i]);
+            //Gizmos.DrawRay(transform.TransformPoint(displacedVertices[i]), normals[i]);
+            Gizmos.DrawRay(transform.TransformPoint(displacedVertices[i]), displacedNormals[i]);
         }
+        */
     }
 }

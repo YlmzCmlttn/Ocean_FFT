@@ -4,17 +4,17 @@ Shader "Custom/Water" {
 	}
 	SubShader {
 		Tags {
-				"RenderType" = "Transparent"
+				//"RenderType" = "Transparent"
+				"RenderType" = "Opaque"
 				"Queue" = "Transparent"
-				//"RenderType" = "Opaque"
                 //"LightMode" = "ForwardBase"
 			}
 		GrabPass { "_WaterBackground"}
 		Pass {
 			
-			Blend SrcAlpha OneMinusSrcAlpha
-			ZWrite [_ZWrite]
-
+			//Blend SrcAlpha OneMinusSrcAlpha
+			//ZWrite [_ZWrite]
+			ZWrite On
 			CGPROGRAM
 
 			#pragma vertex vp
@@ -26,6 +26,7 @@ Shader "Custom/Water" {
 			#pragma shader_feature GERSTNER_WAVE
 			#pragma shader_feature NORMALS_IN_PIXEL_SHADER
 			#pragma shader_feature CIRCULAR_WAVES
+			#pragma shader_feature USE_FBM
 
 			#include "UnityPBSLighting.cginc"
             #include "AutoLight.cginc"
@@ -188,13 +189,112 @@ Shader "Custom/Water" {
 
 				return 0.0f;
 			}
+			
+			float _VertexSeed, _VertexSeedIter, _VertexFrequency, _VertexFrequencyMult, _VertexAmplitude, _VertexAmplitudeMult, _VertexInitialSpeed, _VertexSpeedRamp, _VertexDrag, _VertexHeight, _VertexMaxPeak, _VertexPeakOffset;
+			float _FragmentSeed, _FragmentSeedIter, _FragmentFrequency, _FragmentFrequencyMult, _FragmentAmplitude, _FragmentAmplitudeMult, _FragmentInitialSpeed, _FragmentSpeedRamp, _FragmentDrag, _FragmentHeight, _FragmentMaxPeak, _FragmentPeakOffset;
+			float _NormalStrength;
+			
+			int _WaveCount;
+			int _VertexWaveCount;
+			int _FragmentWaveCount;
+
+			float3 vertexFBM(float3 v) {
+				float f = _VertexFrequency;
+				float a = _VertexAmplitude;
+				float speed = _VertexInitialSpeed;
+				float seed = _VertexSeed;
+				float3 p = v;
+				float amplitudeSum = 0.0f;
+
+				float h = 0.0f;
+				float2 n = 0.0f;
+				for (int wi = 0; wi < _VertexWaveCount; ++wi) {
+					float2 d = normalize(float2(cos(seed), sin(seed)));
+
+					float x = dot(d, p.xz) * f + _Time.y * speed;
+					float wave = a * exp(_VertexMaxPeak * sin(x) - _VertexPeakOffset);
+					float dx = _VertexMaxPeak * wave * cos(x);
+					
+					h += wave;
+					
+					p.xz += d * -dx * a * _VertexDrag;
+
+					amplitudeSum += a;
+					f *= _VertexFrequencyMult;
+					a *= _VertexAmplitudeMult;
+					speed *= _VertexSpeedRamp;
+					seed += _VertexSeedIter;
+				}
+
+				float3 output = float3(h, n.x, n.y) / amplitudeSum;
+				output.x *= _VertexHeight;
+
+				return output;
+			}
+
+			float3 fragmentFBM(float3 v) {
+				float f = _FragmentFrequency;
+				float a = _FragmentAmplitude;
+				float speed = _FragmentInitialSpeed;
+				float seed = _FragmentSeed;
+				float3 p = v;
+
+				float h = 0.0f;
+				float2 n = 0.0f;
+				
+				float amplitudeSum = 0.0f;
+
+				for (int wi = 0; wi < _FragmentWaveCount; ++wi) {
+					float2 d = normalize(float2(cos(seed), sin(seed)));
+
+					float x = dot(d, p.xz) * f + _Time.y * speed;
+					float wave = a * exp(_FragmentMaxPeak * sin(x) - _FragmentPeakOffset);
+					
+					h += wave;
+					p.xz += d * -(_FragmentMaxPeak * wave * cos(x)) * a * _FragmentDrag;
+					
+					n += f * d * wave * cos(x);
+					
+					amplitudeSum += a;
+					f *= _FragmentFrequencyMult;
+					a *= _FragmentAmplitudeMult;
+					speed *= _FragmentSpeedRamp;
+					seed += _FragmentSeedIter;
+				}
+				
+				float3 output = float3(h, n.x, n.y) / amplitudeSum;
+				output.x *= _FragmentHeight;
+
+				return output;
+			}
+
+			float3 centralDifferenceNormal(float3 v, float epsilon) {
+				float2 ex = float2(epsilon, 0);
+				float h = fragmentFBM(v).x;
+				float3 a = float3(v.x, h, v.z);
+
+				float3 b = a - float3(v.x - epsilon, fragmentFBM(v - ex.xyy).x, v.z);
+				float3 c = a - float3(v.x, fragmentFBM(v + ex.yyx).x, v.z + epsilon);
+
+				return normalize(cross(b, c));
+			}
 
 			float3 _Ambient, _DiffuseReflectance, _SpecularReflectance, _FresnelColor;
 			float _Shininess, _FresnelBias, _FresnelStrength, _FresnelShininess;
+			float _AbsorptionCoefficient;
 
 			float4x4 _CameraInvViewProjection;
 			sampler2D _CameraDepthTexture, _WaterBackground;
 			float4 _WaterBackground_TexelSize;
+
+			float hash(uint n) {
+				// integer hash copied from Hugo Elias
+				n = (n << 13U) ^ n;
+				n = n * (n * n * 15731U + 0x789221U) + 0x1376312589U;
+				return float(n & uint(0x7fffffffU)) / float(0x7fffffff);
+			}
+			#define CHOPPINESS 1232.34999345f;
+
 
 			v2f vp(VertexData v) {
 				v2f i;
@@ -205,16 +305,23 @@ Shader "Custom/Water" {
 					float3 h = 0.0f;
 					float3 n = 0.0f;
 
-					[unroll]
-					for (int wi = 0; wi < 4; ++wi) {
-						h += CalculateOffset(i.worldPos, _Waves[wi]);
+					#ifdef USE_FBM
+						float3 fbm = vertexFBM(i.worldPos);
 
-						#ifndef GERSTNER_WAVE
-							#ifndef NORMALS_IN_PIXEL_SHADER
-								n += CalculateNormal(i.worldPos, _Waves[wi]);
+						h.y = fbm.x;
+						n.xy = fbm.yz;
+					#else
+						//[unroll]
+						for (int wi = 0; wi < _WaveCount ; ++wi) {
+							h += CalculateOffset(i.worldPos, _Waves[wi]);
+
+							#ifndef GERSTNER_WAVE
+								#ifndef NORMALS_IN_PIXEL_SHADER
+									n += CalculateNormal(i.worldPos, _Waves[wi]);
+								#endif
 							#endif
-						#endif
-					}
+						}
+					#endif
 
 					float4 newPos = v.vertex + float4(h, 0.0f);
 					i.worldPos = mul(unity_ObjectToWorld, newPos);
@@ -222,8 +329,8 @@ Shader "Custom/Water" {
 					
 					#ifndef NORMALS_IN_PIXEL_SHADER
 					#ifdef GERSTNER_WAVE
-						[unroll]
-						for (int wi = 0; wi < 4; ++wi) {
+						//[unroll]
+						for (int wi = 0; wi < _WaveCount; ++wi) {
 							n += CalculateNormal(i.worldPos, _Waves[wi]);
 						}
 
@@ -257,10 +364,17 @@ Shader "Custom/Water" {
 
 				#ifdef NORMALS_IN_PIXEL_SHADER
 					
-					[unroll]
-					for (int wi = 0; wi < 4; ++wi) {
-						normal += CalculateNormal(i.worldPos, _Waves[wi]);
-					}
+					#ifdef USE_FBM
+						normal.xy = fragmentFBM(i.worldPos).yz * _NormalStrength;
+						//for (int wi = 0; wi < _WaveCount; ++wi) {
+//							normal += CalculateNormal(i.worldPos, _Waves[wi]);
+	//					}
+					#else
+					//[unroll]
+						for (int wi = 0; wi < _WaveCount; ++wi) {
+							normal += CalculateNormal(i.worldPos, _Waves[wi]);
+						}
+					#endif
 
 					#ifdef GERSTNER_WAVE
 						normal = normalize(UnityObjectToWorldNormal(normalize(float3(-normal.x, 1.0f - normal.y, -normal.z))));
@@ -277,7 +391,9 @@ Shader "Custom/Water" {
                 float3 diffuse = _LightColor0.rgb * ndotl * diffuseReflectance;//Lambertian diffuse reflectance
 
 				float3 specularReflectance = _SpecularReflectance;
-                float3 specular = _LightColor0.rgb * specularReflectance * pow(DotClamped(normal, halfwayDir), _Shininess) * ndotl;
+                //float3 specular = _LightColor0.rgb * specularReflectance * pow(DotClamped(normal, halfwayDir), _Shininess) * ndotl;
+				float spec = pow(DotClamped(normal, halfwayDir), _Shininess) * ndotl;
+                float3 specular = _LightColor0.rgb * specularReflectance * spec;
 
 				float3 I = normalize(i.worldPos - _WorldSpaceCameraPos);
 				float R = _FresnelBias + _FresnelStrength * pow(1.0f + dot(I, normal), _FresnelShininess);
@@ -285,19 +401,22 @@ Shader "Custom/Water" {
 				float3 fresnel = _FresnelColor * R;
 
 				float2 uv = i.pos.xy / _ScreenParams.xy;
-				float2 backgroundUV = uv + _WaterBackground_TexelSize.xy * normal.xz * 20;
-
-				float4 backgroundColor = tex2D(_WaterBackground, backgroundUV);
+				//float2 backgroundUV = uv + _WaterBackground_TexelSize.xy * normal.xz * 20;
+				//float4 backgroundColor = tex2D(_WaterBackground, backgroundUV);
+				float4 backgroundColor = tex2D(_WaterBackground, uv);
 
 				float3 depthPos = ComputeWorldSpacePosition(uv, (SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv)));
 
 				float waterDepth = length(depthPos - i.worldPos);
 				
-				float3 beersLaw = exp(-waterDepth * 0.9f); 
+				//float3 beersLaw = exp(-waterDepth * 0.9f); 
+				float3 beersLaw = exp(-waterDepth * _AbsorptionCoefficient);
 
-				float4 albedo = float4(saturate(_Ambient + diffuse + specular + fresnel), ndotl);
-				return float4(saturate(_Ambient + diffuse + specular + fresnel), 1.0f);
-                return float4(lerp(albedo.rgb, backgroundColor * (1 - albedo.a) + albedo.rgb, saturate(beersLaw)), 1.0f);
+				//float4 albedo = float4(saturate(_Ambient + diffuse + specular + fresnel), ndotl);
+				float4 albedo = float4(saturate(_Ambient + diffuse + specular + fresnel), saturate(R + spec));
+				//return float4(saturate(_Ambient + diffuse + specular + fresnel), 1.0f);
+                //return float4(lerp(albedo.rgb, backgroundColor * (1 - albedo.a) + albedo.rgb, saturate(beersLaw)), 1.0f);
+				return float4(lerp(albedo.rgb, backgroundColor * (1 - albedo.a) + albedo.rgb, saturate(beersLaw - R - spec)), 1.0f);
 
 			}
 

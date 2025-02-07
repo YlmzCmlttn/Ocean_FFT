@@ -12,13 +12,13 @@ public struct Wave {
     public WaveType waveType;
     
 
-    public Wave(float wavelength, float amplitude, float speed, float direction, float steepness, WaveType waveType, Vector2 origin, WaveFunction waveFunction) {
+    public Wave(float wavelength, float amplitude, float speed, float direction, float steepness, WaveType waveType, Vector2 origin, WaveFunction waveFunction, int waveCount) {
         this.frequency = 2.0f / wavelength;
         this.amplitude = amplitude;
         this.phase = speed * Mathf.Sqrt(9.8f * 2.0f * Mathf.PI / wavelength); ;
 
         if (waveFunction == WaveFunction.Gerstner)
-            this.steepness = steepness / this.frequency * this.amplitude * 4.0f;
+            this.steepness = steepness / this.frequency * this.amplitude * (float)waveCount;
         else
             this.steepness = steepness;
 

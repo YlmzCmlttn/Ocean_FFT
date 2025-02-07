@@ -25,6 +25,7 @@ public class OceanEditor : Editor {
     private bool usingPixelShaderNormals = false;
     private bool usingCircularWaves = false;
     private bool randomGeneration = false;
+    private bool usingFBM = false;
 
     private Ocean.WaveFunction waveFunction = Ocean.WaveFunction.Sine;
 
@@ -53,6 +54,15 @@ public class OceanEditor : Editor {
     SerializedProperty fresnelBias;
     SerializedProperty fresnelShininess;
     SerializedProperty fresnelStrength;
+    SerializedProperty absorptionCoefficient;
+
+    SerializedProperty vertexWaveCount;
+    SerializedProperty fragmentWaveCount;
+    SerializedProperty vertexSeed, vertexSeedIter, vertexFrequency, vertexFrequencyMult, vertexAmplitude, vertexAmplitudeMult, vertexInitialSpeed, vertexSpeedRamp, vertexDrag, vertexHeight, vertexMaxPeak, vertexPeakOffset;
+    SerializedProperty fragmentSeed, fragmentSeedIter, fragmentFrequency, fragmentFrequencyMult, fragmentAmplitude, fragmentAmplitudeMult, fragmentInitialSpeed, fragmentSpeedRamp, fragmentDrag, fragmentHeight, fragmentMaxPeak, fragmentPeakOffset;
+    SerializedProperty normalStrength;
+
+    SerializedProperty waveCount;
 
 
     void OnEnable() {
@@ -84,7 +94,8 @@ public class OceanEditor : Editor {
         steepness1 = serializedObject.FindProperty("steepness1");
         steepness2 = serializedObject.FindProperty("steepness2");
         steepness3 = serializedObject.FindProperty("steepness3");
-        steepness4 = serializedObject.FindProperty("steepness4"); 
+        steepness4 = serializedObject.FindProperty("steepness4");
+        waveCount = serializedObject.FindProperty("waveCount");
         medianWavelength = serializedObject.FindProperty("medianWavelength");
         wavelengthRange = serializedObject.FindProperty("wavelengthRange");
         medianDirection = serializedObject.FindProperty("medianDirection");
@@ -101,6 +112,38 @@ public class OceanEditor : Editor {
         fresnelBias = serializedObject.FindProperty("fresnelBias");
         fresnelStrength = serializedObject.FindProperty("fresnelStrength");
         fresnelShininess = serializedObject.FindProperty("fresnelShininess");
+        absorptionCoefficient = serializedObject.FindProperty("absorptionCoefficient");
+
+
+        vertexSeed = serializedObject.FindProperty("vertexSeed");
+        vertexSeedIter = serializedObject.FindProperty("vertexSeedIter");
+        vertexFrequency = serializedObject.FindProperty("vertexFrequency");
+        vertexFrequencyMult = serializedObject.FindProperty("vertexFrequencyMult");
+        vertexAmplitude = serializedObject.FindProperty("vertexAmplitude");
+        vertexAmplitudeMult = serializedObject.FindProperty("vertexAmplitudeMult");
+        vertexInitialSpeed = serializedObject.FindProperty("vertexInitialSpeed");
+        vertexSpeedRamp = serializedObject.FindProperty("vertexSpeedRamp");
+        vertexDrag = serializedObject.FindProperty("vertexDrag");
+        vertexHeight = serializedObject.FindProperty("vertexHeight");
+        vertexMaxPeak = serializedObject.FindProperty("vertexMaxPeak");
+        vertexPeakOffset = serializedObject.FindProperty("vertexPeakOffset");
+        fragmentSeed = serializedObject.FindProperty("fragmentSeed");
+        fragmentSeedIter = serializedObject.FindProperty("fragmentSeedIter");
+        fragmentFrequency = serializedObject.FindProperty("fragmentFrequency");
+        fragmentFrequencyMult = serializedObject.FindProperty("fragmentFrequencyMult");
+        fragmentAmplitude = serializedObject.FindProperty("fragmentAmplitude");
+        fragmentAmplitudeMult = serializedObject.FindProperty("fragmentAmplitudeMult");
+        fragmentInitialSpeed = serializedObject.FindProperty("fragmentInitialSpeed");
+        fragmentSpeedRamp = serializedObject.FindProperty("fragmentSpeedRamp");
+        fragmentDrag = serializedObject.FindProperty("fragmentDrag");
+        fragmentHeight = serializedObject.FindProperty("fragmentHeight");
+        fragmentMaxPeak = serializedObject.FindProperty("fragmentMaxPeak");
+        fragmentPeakOffset = serializedObject.FindProperty("fragmentPeakOffset");
+        vertexWaveCount = serializedObject.FindProperty("vertexWaveCount");
+        fragmentWaveCount = serializedObject.FindProperty("fragmentWaveCount");
+        normalStrength = serializedObject.FindProperty("normalStrength");
+
+
     }
 
     public override void OnInspectorGUI() {
@@ -157,24 +200,74 @@ public class OceanEditor : Editor {
             EditorGUILayout.LabelField("Procedural Settings", EditorStyles.boldLabel);
             EditorGUI.indentLevel++;
 
-            EditorGUILayout.Slider(medianWavelength, 0.0f, 3.0f, new GUIContent("Median Wavelength"));
-            EditorGUILayout.Slider(wavelengthRange, 0.0f, 2.0f, new GUIContent("Wavelength Range"));
-            EditorGUILayout.Slider(medianDirection, 0.0f, 360.0f, new GUIContent("Median Direction"));
-            EditorGUILayout.Slider(directionalRange, 0.0f, 360.0f, new GUIContent("Directional Range"));
-            EditorGUILayout.Slider(medianAmplitude, 0.0f, 3.0f, new GUIContent("Median Amplitude"));
-            EditorGUILayout.Slider(medianSpeed, 0.0f, 2.0f, new GUIContent("Median Speed"));
-            EditorGUILayout.Slider(speedRange, 0.0f, 1.0f, new GUIContent("Speed Range"));
+            usingFBM = ((Ocean)target).usingFBM;
 
-            if (waveFunction == Ocean.WaveFunction.SteepSine) {
-                EditorGUILayout.Slider(steepness, 1.0f, 10.0f, new GUIContent("Steepness"));
-            } else if (waveFunction == Ocean.WaveFunction.Gerstner) {
-                EditorGUILayout.Slider(steepness, 0.0f, 1.0f, new GUIContent("Steepness"));
-            }
-            if (GUILayout.Button("Regenerate Waves")) {
+            if (usingFBM) {
+                EditorGUILayout.IntSlider(vertexWaveCount, 0, 64, new GUIContent("Vertex Wave Count"));
+                EditorGUILayout.IntSlider(fragmentWaveCount, 0, 64, new GUIContent("Fragment Wave Count"));
+            } else
+                EditorGUILayout.IntSlider(waveCount, 0, 64, new GUIContent("Wave Count"));
+
+            if (GUILayout.Button("Use FBM: " + usingFBM.ToString())) {
                 Ocean water = (Ocean)target;
-                water.GenerateNewWaves();
+                water.ToggleFBM();
             }
+            EditorGUILayout.Space();
 
+            if (usingFBM) {
+                EditorGUI.indentLevel--;
+                EditorGUILayout.LabelField("Vertex Settings", EditorStyles.boldLabel);
+                EditorGUI.indentLevel++;
+
+                EditorGUILayout.Slider(vertexSeed, 0.0f, 300.0f, new GUIContent("Vertex Seed"));
+                EditorGUILayout.Slider(vertexSeedIter, 0.0f, 2000.0f, new GUIContent("Vertex Seed Iterator"));
+                EditorGUILayout.Slider(vertexFrequency, 0.0f, 2.0f, new GUIContent("Vertex Frequency"));
+                EditorGUILayout.Slider(vertexFrequencyMult, 0.0f, 2.0f, new GUIContent("Vertex Frequency Mult"));
+                EditorGUILayout.Slider(vertexAmplitude, 0.0f, 2.0f, new GUIContent("Vertex Amplitude"));
+                EditorGUILayout.Slider(vertexAmplitudeMult, 0.0f, 2.0f, new GUIContent("Vertex Amplitude Mult"));
+                EditorGUILayout.Slider(vertexMaxPeak, 0.0f, 2.0f, new GUIContent("Vertex Max Peak"));
+                EditorGUILayout.Slider(vertexPeakOffset, 0.0f, 2.0f, new GUIContent("Vertex Peak Offset"));
+                EditorGUILayout.Slider(vertexInitialSpeed, 0.0f, 2.0f, new GUIContent("Vertex Initial Speed"));
+                EditorGUILayout.Slider(vertexSpeedRamp, 0.0f, 2.0f, new GUIContent("Vertex Speed Ramp"));
+                EditorGUILayout.Slider(vertexDrag, 0.0f, 2.0f, new GUIContent("Vertex Drag"));
+                EditorGUILayout.Slider(vertexHeight, 0.0f, 2.0f, new GUIContent("Vertex Height"));
+                EditorGUI.indentLevel--;
+                EditorGUILayout.LabelField("Fragment Settings", EditorStyles.boldLabel);
+                EditorGUI.indentLevel++;
+
+                EditorGUILayout.Slider(fragmentSeed, 0.0f, 300.0f, new GUIContent("Fragment Seed"));
+                EditorGUILayout.Slider(fragmentSeedIter, 0.0f, 2000.0f, new GUIContent("Fragment Seed Iterator"));
+                EditorGUILayout.Slider(fragmentFrequency, 0.0f, 2.0f, new GUIContent("Fragment Frequency"));
+                EditorGUILayout.Slider(fragmentFrequencyMult, 0.0f, 2.0f, new GUIContent("Fragment Frequency Mult"));
+                EditorGUILayout.Slider(fragmentAmplitude, 0.0f, 2.0f, new GUIContent("Fragment Amplitude"));
+                EditorGUILayout.Slider(fragmentAmplitudeMult, 0.0f, 2.0f, new GUIContent("Fragment Amplitude Mult"));
+                EditorGUILayout.Slider(fragmentMaxPeak, 0.0f, 2.0f, new GUIContent("Fragment Max Peak"));
+                EditorGUILayout.Slider(fragmentPeakOffset, 0.0f, 2.0f, new GUIContent("Fragment Peak Offset"));
+                EditorGUILayout.Slider(fragmentInitialSpeed, 0.0f, 2.0f, new GUIContent("Fragment Initial Speed"));
+                EditorGUILayout.Slider(fragmentSpeedRamp, 0.0f, 2.0f, new GUIContent("Fragment Speed Ramp"));
+                EditorGUILayout.Slider(fragmentDrag, 0.0f, 2.0f, new GUIContent("Fragment Drag"));
+                EditorGUILayout.Slider(fragmentHeight, 0.0f, 2.0f, new GUIContent("Fragment Height"));
+                EditorGUILayout.Slider(normalStrength, 0.0f, 2.0f, new GUIContent("Normal Strength"));
+            } else {
+                EditorGUILayout.Slider(medianWavelength, 0.0f, 3.0f, new GUIContent("Median Wavelength"));
+                EditorGUILayout.Slider(wavelengthRange, 0.0f, 2.0f, new GUIContent("Wavelength Range"));
+                EditorGUILayout.Slider(medianDirection, 0.0f, 360.0f, new GUIContent("Median Direction"));
+                EditorGUILayout.Slider(directionalRange, 0.0f, 360.0f, new GUIContent("Directional Range"));
+                EditorGUILayout.Slider(medianAmplitude, 0.0f, 3.0f, new GUIContent("Median Amplitude"));
+                EditorGUILayout.Slider(medianSpeed, 0.0f, 2.0f, new GUIContent("Median Speed"));
+                EditorGUILayout.Slider(speedRange, 0.0f, 1.0f, new GUIContent("Speed Range"));
+
+                if (waveFunction == Ocean.WaveFunction.SteepSine) {
+                    EditorGUILayout.Slider(steepness, 1.0f, 10.0f, new GUIContent("Steepness"));
+                } else if (waveFunction == Ocean.WaveFunction.Gerstner) {
+                    EditorGUILayout.Slider(steepness, 0.0f, 1.0f, new GUIContent("Steepness"));
+                }
+
+                if (GUILayout.Button("Regenerate Waves")) {
+                    Ocean water = (Ocean)target;
+                    water.GenerateNewWaves();
+                }
+            }
         } else {
             EditorGUI.indentLevel--;
             EditorGUILayout.LabelField("Wave One", EditorStyles.boldLabel);
@@ -227,6 +320,7 @@ public class OceanEditor : Editor {
         EditorGUILayout.Slider(fresnelBias, 0.0f, 1.0f, new GUIContent("Fresnel Bias"));
         EditorGUILayout.Slider(fresnelStrength, 0.0f, 1.0f, new GUIContent("Fresnel Strength"));
         EditorGUILayout.Slider(fresnelShininess, 0.0f, 20.0f, new GUIContent("Fresnel Shininess"));
+        EditorGUILayout.Slider(absorptionCoefficient, 0.0f, 2.0f, new GUIContent("Absorption Coefficient"));
 
         serializedObject.ApplyModifiedProperties();
     }
