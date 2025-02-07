@@ -1,10 +1,19 @@
 Shader "Custom/Water" {
+	Properties{
+		[Enum(Off,0,On,1)] _ZWrite ("Z Write", Float) = 1
+	}
 	SubShader {
-		Pass {
-			Tags {
-				"RenderType" = "Opaque"
-                "LightMode" = "ForwardBase"
+		Tags {
+				"RenderType" = "Transparent"
+				"Queue" = "Transparent"
+				//"RenderType" = "Opaque"
+                //"LightMode" = "ForwardBase"
 			}
+		GrabPass { "_WaterBackground"}
+		Pass {
+			
+			Blend SrcAlpha OneMinusSrcAlpha
+			ZWrite [_ZWrite]
 
 			CGPROGRAM
 
@@ -180,8 +189,12 @@ Shader "Custom/Water" {
 				return 0.0f;
 			}
 
-			float3 _Ambient, _DiffuseReflectance, _SpecularReflectance;
-			float _Shininess;
+			float3 _Ambient, _DiffuseReflectance, _SpecularReflectance, _FresnelColor;
+			float _Shininess, _FresnelBias, _FresnelStrength, _FresnelShininess;
+
+			float4x4 _CameraInvViewProjection;
+			sampler2D _CameraDepthTexture, _WaterBackground;
+			float4 _WaterBackground_TexelSize;
 
 			v2f vp(VertexData v) {
 				v2f i;
@@ -230,11 +243,18 @@ Shader "Custom/Water" {
 				return i;
 			}
 
+			float3 ComputeWorldSpacePosition(float2 positionNDC, float deviceDepth) {
+				float4 positionCS = float4(positionNDC * 2.0 - 1.0, deviceDepth, 1.0);
+				float4 hpositionWS = mul(_CameraInvViewProjection, positionCS);
+				return hpositionWS.xyz / hpositionWS.w;
+			}
+
 			float4 fp(v2f i) : SV_TARGET {
                 float3 lightDir = _WorldSpaceLightPos0;
                 float3 viewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
                 float3 halfwayDir = normalize(lightDir + viewDir);
 				float3 normal = 0.0f;
+
 				#ifdef NORMALS_IN_PIXEL_SHADER
 					
 					[unroll]
@@ -259,12 +279,26 @@ Shader "Custom/Water" {
 				float3 specularReflectance = _SpecularReflectance;
                 float3 specular = _LightColor0.rgb * specularReflectance * pow(DotClamped(normal, halfwayDir), _Shininess) * ndotl;
 
-				//Includes an additional multiplication by ndotl (the angle between normal and light direction).
-				//This helps reduce specular intensity at grazing angles, making it more realistic.
-				//The specularReflectance = 1.0f is a placeholder for a more complex material-specific specular term.
+				float3 I = normalize(i.worldPos - _WorldSpaceCameraPos);
+				float R = _FresnelBias + _FresnelStrength * pow(1.0f + dot(I, normal), _FresnelShininess);
 
-				                
-				return float4(saturate(_Ambient + diffuse + specular), 1.0f);
+				float3 fresnel = _FresnelColor * R;
+
+				float2 uv = i.pos.xy / _ScreenParams.xy;
+				float2 backgroundUV = uv + _WaterBackground_TexelSize.xy * normal.xz * 20;
+
+				float4 backgroundColor = tex2D(_WaterBackground, backgroundUV);
+
+				float3 depthPos = ComputeWorldSpacePosition(uv, (SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv)));
+
+				float waterDepth = length(depthPos - i.worldPos);
+				
+				float3 beersLaw = exp(-waterDepth * 0.9f); 
+
+				float4 albedo = float4(saturate(_Ambient + diffuse + specular + fresnel), ndotl);
+				return float4(saturate(_Ambient + diffuse + specular + fresnel), 1.0f);
+                return float4(lerp(albedo.rgb, backgroundColor * (1 - albedo.a) + albedo.rgb, saturate(beersLaw)), 1.0f);
+
 			}
 
 			ENDCG

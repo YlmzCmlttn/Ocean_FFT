@@ -52,6 +52,9 @@ public class Ocean : MonoBehaviour {
     public float wavelength4 = 1.0f;
     public float steepness4 = 1.0f;
 
+
+
+    private Camera cam;
     private Wave[] waves = new Wave[4];
 
 
@@ -300,6 +303,8 @@ public class Ocean : MonoBehaviour {
         CreateWaterPlane();
         CreateMaterial();
         CreateWaveBuffer();
+
+        cam = GameObject.Find("Main Camera").GetComponent<Camera>();
     }
 
     void UpdateVerticesCPU() {
@@ -375,6 +380,11 @@ public class Ocean : MonoBehaviour {
         material.SetFloat("_FresnelBias", fresnelBias);
         material.SetFloat("_FresnelStrength", fresnelStrength);
         material.SetFloat("_FresnelShininess", fresnelShininess);
+
+        Matrix4x4 projMatrix = GL.GetGPUProjectionMatrix(cam.projectionMatrix, false);
+        Matrix4x4 viewProjMatrix = projMatrix * cam.worldToCameraMatrix;
+        material.SetMatrix("_CameraInvViewProjection", viewProjMatrix.inverse);
+
         if (usingVertexDisplacement) {
             if (updateStatics) {
                 if (randomGeneration) {
