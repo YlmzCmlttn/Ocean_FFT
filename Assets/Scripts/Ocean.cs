@@ -131,6 +131,8 @@ public class Ocean : MonoBehaviour {
     public float specularNormalStrength = 1;
     [ColorUsageAttribute(false, true)]
     public Color fresnelColor;
+    public bool useTextureForFresnel = false;
+    public Texture environmentTexture;
 
     public float fresnelBias, fresnelStrength, fresnelShininess;
     public float fresnelNormalStrength = 1;
@@ -139,7 +141,6 @@ public class Ocean : MonoBehaviour {
     public Color tipColor;
     public float tipAttenuation;
 
-    public float absorptionCoefficient;
 
 
     public void ToggleCircularWaves() {
@@ -443,13 +444,18 @@ public class Ocean : MonoBehaviour {
         material.SetFloat("_FresnelShininess", fresnelShininess);
 
         material.SetFloat("_TipAttenuation", tipAttenuation);
-        material.SetFloat("_AbsorptionCoefficient", absorptionCoefficient);
 
         material.SetFloat("_FresnelNormalStrength", fresnelNormalStrength);
         material.SetFloat("_SpecularNormalStrength", specularNormalStrength);
         material.SetInt("_WaveCount", waveCount);
+        material.SetInt("_UseEnvironmentMap", useTextureForFresnel ? 1 : 0);
+
+        if (useTextureForFresnel) {
+            material.SetTexture("_EnvironmentMap", environmentTexture);
+        }
         if (atmosphere != null) {
             material.SetVector("_SunDirection", atmosphere.GetSunDirection());
+            material.SetVector("_SunColor", atmosphere.GetSunColor());
         }
 
         Matrix4x4 projMatrix = GL.GetGPUProjectionMatrix(cam.projectionMatrix, false);

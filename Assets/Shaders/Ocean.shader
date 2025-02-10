@@ -1,20 +1,18 @@
-Shader "Custom/Water" {
-	Properties{
-		[Enum(Off,0,On,1)] _ZWrite ("Z Write", Float) = 1
-	}
+Shader "Custom/Ocean" {
+		
+		Properties {
+			[Enum(Off, 0, On, 1)] _ZWrite ("Z Write", Float) = 1
+		}
+
 	SubShader {
 		Tags {
-				//"RenderType" = "Transparent"
-				"RenderType" = "Opaque"
-				"Queue" = "Transparent"
-                "LightMode" = "ForwardBase"
-			}
-		GrabPass { "_WaterBackground"}
+			"LightMode" = "ForwardBase"
+		}
+
 		Pass {
-			
-			//Blend SrcAlpha OneMinusSrcAlpha
-			//ZWrite [_ZWrite]
+
 			ZWrite On
+
 			CGPROGRAM
 
 			#pragma vertex vp
@@ -55,6 +53,7 @@ Shader "Custom/Water" {
 			StructuredBuffer<Wave> _Waves;
 
 			//#define sin fastSine
+
 			#define PI 3.14159265358979323846
 
 			float fastSine(float x) {
@@ -156,8 +155,6 @@ Shader "Custom/Water" {
 				return n;
 			}
 
-			
-
 			float3 CalculateOffset(float3 v, Wave w) {
 				#ifdef SINE_WAVE
 					return float3(0.0f, Sine(v, w), 0.0f);
@@ -189,8 +186,16 @@ Shader "Custom/Water" {
 
 				return 0.0f;
 			}
-			float3 _SunDirection;
-			
+
+			float hash(uint n) {
+				// integer hash copied from Hugo Elias
+				n = (n << 13U) ^ n;
+				n = n * (n * n * 15731U + 0x789221U) + 0x1376312589U;
+				return float(n & uint(0x7fffffffU)) / float(0x7fffffff);
+			}
+
+			float3 _SunDirection, _SunColor;
+
 			float _VertexSeed, _VertexSeedIter, _VertexFrequency, _VertexFrequencyMult, _VertexAmplitude, _VertexAmplitudeMult, _VertexInitialSpeed, _VertexSpeedRamp, _VertexDrag, _VertexHeight, _VertexMaxPeak, _VertexPeakOffset;
 			float _FragmentSeed, _FragmentSeedIter, _FragmentFrequency, _FragmentFrequencyMult, _FragmentAmplitude, _FragmentAmplitudeMult, _FragmentInitialSpeed, _FragmentSpeedRamp, _FragmentDrag, _FragmentHeight, _FragmentMaxPeak, _FragmentPeakOffset;
 			float _NormalStrength, _FresnelNormalStrength, _SpecularNormalStrength;
@@ -198,6 +203,9 @@ Shader "Custom/Water" {
 			int _WaveCount;
 			int _VertexWaveCount;
 			int _FragmentWaveCount;
+
+			samplerCUBE _EnvironmentMap;
+			int _UseEnvironmentMap;
 
 			float3 vertexFBM(float3 v) {
 				float f = _VertexFrequency;
@@ -250,15 +258,12 @@ Shader "Custom/Water" {
 
 					float x = dot(d, p.xz) * f + _Time.y * speed;
 					float wave = a * exp(_FragmentMaxPeak * sin(x) - _FragmentPeakOffset);
-
 					float2 dw = f * d * (_FragmentMaxPeak * wave * cos(x));
 					
 					h += wave;
-					//p.xz += d * -(_FragmentMaxPeak * wave * cos(x)) * a * _FragmentDrag;
 					p.xz += -dw * a * _FragmentDrag;
 					
-					//n += f * d * wave * cos(x);
-					n+= dw;
+					n += dw;
 					
 					amplitudeSum += a;
 					f *= _FragmentFrequencyMult;
@@ -286,20 +291,9 @@ Shader "Custom/Water" {
 
 			float3 _Ambient, _DiffuseReflectance, _SpecularReflectance, _FresnelColor, _TipColor;
 			float _Shininess, _FresnelBias, _FresnelStrength, _FresnelShininess, _TipAttenuation;
-			float _AbsorptionCoefficient;
 
 			float4x4 _CameraInvViewProjection;
-			sampler2D _CameraDepthTexture, _WaterBackground;
-			float4 _WaterBackground_TexelSize;
-
-			float hash(uint n) {
-				// integer hash copied from Hugo Elias
-				n = (n << 13U) ^ n;
-				n = n * (n * n * 15731U + 0x789221U) + 0x1376312589U;
-				return float(n & uint(0x7fffffffU)) / float(0x7fffffff);
-			}
-			#define CHOPPINESS 1232.34999345f;
-
+			sampler2D _CameraDepthTexture;
 
 			v2f vp(VertexData v) {
 				v2f i;
@@ -311,21 +305,20 @@ Shader "Custom/Water" {
 					float3 n = 0.0f;
 
 					#ifdef USE_FBM
-						float3 fbm = vertexFBM(i.worldPos);
+					float3 fbm = vertexFBM(i.worldPos);
 
-						h.y = fbm.x;
-						n.xy = fbm.yz;
+					h.y = fbm.x;
+					n.xy = fbm.yz;
 					#else
-						//[unroll]
-						for (int wi = 0; wi < _WaveCount ; ++wi) {
-							h += CalculateOffset(i.worldPos, _Waves[wi]);
+					for (int wi = 0; wi < _WaveCount; ++wi) {
+						h += CalculateOffset(i.worldPos, _Waves[wi]);
 
-							#ifndef GERSTNER_WAVE
-								#ifndef NORMALS_IN_PIXEL_SHADER
-									n += CalculateNormal(i.worldPos, _Waves[wi]);
-								#endif
+						#ifndef GERSTNER_WAVE
+							#ifndef NORMALS_IN_PIXEL_SHADER
+								n += CalculateNormal(i.worldPos, _Waves[wi]);
 							#endif
-						}
+						#endif
+					}
 					#endif
 
 					float4 newPos = v.vertex + float4(h, 0.0f);
@@ -334,7 +327,6 @@ Shader "Custom/Water" {
 					
 					#ifndef NORMALS_IN_PIXEL_SHADER
 					#ifdef GERSTNER_WAVE
-						//[unroll]
 						for (int wi = 0; wi < _WaveCount; ++wi) {
 							n += CalculateNormal(i.worldPos, _Waves[wi]);
 						}
@@ -362,101 +354,86 @@ Shader "Custom/Water" {
 			}
 
 			float4 fp(v2f i) : SV_TARGET {
-                //float3 lightDir = _WorldSpaceLightPos0;
-				 float3 lightDir = -normalize(_SunDirection);
+                float3 lightDir = -normalize(_SunDirection);
                 float3 viewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
                 float3 halfwayDir = normalize(lightDir + viewDir);
+
 				float3 normal = 0.0f;
 				float height = 0.0f;
 
 				#ifdef NORMALS_IN_PIXEL_SHADER
-					
-					#ifdef USE_FBM
-						//normal.xy = fragmentFBM(i.worldPos).yz * _NormalStrength;
-						float3 fbm = fragmentFBM(i.worldPos);
-						height = fbm.x;
-						normal.xy = fbm.yz * _NormalStrength;
-						//for (int wi = 0; wi < _WaveCount; ++wi) {
-//							normal += CalculateNormal(i.worldPos, _Waves[wi]);
-	//					}
-					#else
-					//[unroll]
-						for (int wi = 0; wi < _WaveCount; ++wi) {
-							normal += CalculateNormal(i.worldPos, _Waves[wi]);
-						}
-					#endif
 
-					#ifdef GERSTNER_WAVE
-						normal = normalize(UnityObjectToWorldNormal(normalize(float3(-normal.x, 1.0f - normal.y, -normal.z))));
-					#else
-						normal = normalize(UnityObjectToWorldNormal(normalize(float3(-normal.x, 1.0f, -normal.y))));
-					#endif
+				#ifdef USE_FBM
+					float3 fbm = fragmentFBM(i.worldPos);
+					height = fbm.x;
+					normal.xy = fbm.yz;
 				#else
-					normal = normalize(i.normal); //It is already normalize ?
+				for (int wi = 0; wi < _WaveCount; ++wi) {
+					normal += CalculateNormal(i.worldPos, _Waves[wi]);
+				}
+				#endif
+				#ifdef GERSTNER_WAVE
+					normal = normalize(UnityObjectToWorldNormal(normalize(float3(-normal.x, 1.0f - normal.y, -normal.z))));
+				#else
+					normal = normalize(UnityObjectToWorldNormal(normalize(float3(-normal.x, 1.0f, -normal.y))));
 				#endif
 
-				float ndotl = DotClamped(lightDir, normal); 
+				#else
+					normal = normalize(i.normal);
+				#endif
 
-				float3 diffuseReflectance = _DiffuseReflectance / PI;//assumption that light is uniformly scattered in all directions.
-                float3 diffuse = _LightColor0.rgb * ndotl * diffuseReflectance;//Lambertian diffuse reflectance
+				// normal = centralDifferenceNormal(i.worldPos, 0.01f);
+				normal.xz *= _NormalStrength;
+				normal = normalize(normal);
+
+				float ndotl = DotClamped(lightDir, normal);
+
+				float3 diffuseReflectance = _DiffuseReflectance / PI;
+                float3 diffuse = _LightColor0.rgb * ndotl * diffuseReflectance;
+
+				// Schlick Fresnel
+				float3 fresnelNormal = normal;
+				fresnelNormal.xz *= _FresnelNormalStrength;
+				fresnelNormal = normalize(fresnelNormal);
+				float base = 1 - dot(viewDir, fresnelNormal);
+				float exponential = pow(base, _FresnelShininess);
+				float R = exponential + _FresnelBias * (1.0f - exponential);
+				R *= _FresnelStrength;
+				
+				float3 fresnel = _FresnelColor * R;
+
+				if (_UseEnvironmentMap) {
+					float3 reflectedDir = reflect(-viewDir, normal);
+					float3 skyCol = texCUBE(_EnvironmentMap, reflectedDir).rgb;
+					float3 sun = _SunColor * pow(max(0.0f, DotClamped(reflectedDir, lightDir)), 500.0f);
+
+					fresnel = skyCol.rgb * R;
+					fresnel += sun * R;
+				}
+
 
 				float3 specularReflectance = _SpecularReflectance;
-                //float3 specular = _LightColor0.rgb * specularReflectance * pow(DotClamped(normal, halfwayDir), _Shininess) * ndotl;
-				//float spec = pow(DotClamped(normal, halfwayDir), _Shininess) * ndotl;
 				float3 specNormal = normal;
-				//specNormal.xz *= 5.0f;
 				specNormal.xz *= _SpecularNormalStrength;
 				specNormal = normalize(specNormal);
 				float spec = pow(DotClamped(specNormal, halfwayDir), _Shininess) * ndotl;
-
                 float3 specular = _LightColor0.rgb * specularReflectance * spec;
 
-				float3 I = normalize(i.worldPos - _WorldSpaceCameraPos);
-				//float R = _FresnelBias + _FresnelStrength * pow(1.0f + dot(I, normal), _FresnelShininess);
+				// Schlick Fresnel but again for specular
+				base = 1 - DotClamped(viewDir, halfwayDir);
+				exponential = pow(base, 5.0f);
+				R = exponential + _FresnelBias * (1.0f - exponential);
 
-
-				float3 fresnelNormal = normal;
-				//fresnelNormal.xz *= 0.25f;
-				fresnelNormal.xz *= _FresnelNormalStrength;
-				fresnelNormal = normalize(fresnelNormal);
-				float R = _FresnelBias + _FresnelStrength * pow(1.0f + dot(I, fresnelNormal), _FresnelShininess);
-
-
-				float3 fresnel = _FresnelColor * R;
-
-				float2 uv = i.pos.xy / _ScreenParams.xy;
-				//float2 backgroundUV = uv + _WaterBackground_TexelSize.xy * normal.xz * 20;
-				//float4 backgroundColor = tex2D(_WaterBackground, backgroundUV);
-				float4 backgroundColor = tex2D(_WaterBackground, uv);
-
-				float3 depthPos = ComputeWorldSpacePosition(uv, (SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv)));
-
-				float waterDepth = length(depthPos - i.worldPos);
+				specular *= R;
 				
-				//float3 beersLaw = exp(-waterDepth * 0.9f); 
-				float3 beersLaw = exp(-waterDepth * _AbsorptionCoefficient);
 
-				//float4 albedo = float4(saturate(_Ambient + diffuse + specular + fresnel), ndotl);
-				//float4 albedo = float4(saturate(_Ambient + diffuse + specular + fresnel), saturate(R + spec));
-				//float3 tipColor = float3(1.0f, 1.0f, 0.9f) * height * height * height * height;				
-				//float3 tipColor = float3(0.3f, 0.3f, 0.4f) * height * height * height * height;
+
 				float3 tipColor = _TipColor * pow(height, _TipAttenuation);
 
-				//float4 albedo = float4(saturate(_Ambient + diffuse + specular + fresnel + tipColor), saturate(1 - R + spec));
-				float4 albedo = float4(saturate(_Ambient + diffuse + specular + fresnel + tipColor * (1 - R)), saturate(1 - R + spec));
+				float3 output = _Ambient + diffuse + specular + fresnel + tipColor;
 
-				float3 output = lerp(albedo.rgb, backgroundColor * (1 - albedo.a) + albedo.rgb, saturate(beersLaw - R - spec));
 
-				float viewDistance = length(_WorldSpaceCameraPos - i.worldPos);
-				float fogFactor = (0.0086f / sqrt(log(2))) * max(0.0f, viewDistance - 15.0f);
-                fogFactor = exp(-fogFactor * fogFactor);
-
-				//return float4(saturate(_Ambient + diffuse + specular + fresnel), 1.0f);
-                //return float4(lerp(albedo.rgb, backgroundColor * (1 - albedo.a) + albedo.rgb, saturate(beersLaw)), 1.0f);
-				//return float4(lerp(albedo.rgb, backgroundColor * (1 - albedo.a) + albedo.rgb, saturate(beersLaw - R - spec)), 1.0f);
-				//return float4(lerp(0.61, output, saturate(fogFactor)), 1.0f);
 				return float4(output, 1.0f);
-
 			}
 
 			ENDCG

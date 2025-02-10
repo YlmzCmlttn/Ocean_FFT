@@ -52,10 +52,12 @@ public class OceanEditor : Editor {
     SerializedProperty specularReflectance;
     SerializedProperty shininess;
     SerializedProperty fresnelColor;
+    SerializedProperty environmentTexture;
+    SerializedProperty useTextureForFresnel;
     SerializedProperty fresnelBias;
     SerializedProperty fresnelShininess;
     SerializedProperty fresnelStrength;
-    SerializedProperty absorptionCoefficient;
+
     SerializedProperty tipColor;
     SerializedProperty tipAttenuation;
 
@@ -116,7 +118,6 @@ public class OceanEditor : Editor {
         fresnelBias = serializedObject.FindProperty("fresnelBias");
         fresnelStrength = serializedObject.FindProperty("fresnelStrength");
         fresnelShininess = serializedObject.FindProperty("fresnelShininess");
-        absorptionCoefficient = serializedObject.FindProperty("absorptionCoefficient");
 
 
         vertexSeed = serializedObject.FindProperty("vertexSeed");
@@ -150,6 +151,8 @@ public class OceanEditor : Editor {
         tipAttenuation = serializedObject.FindProperty("tipAttenuation");
         fresnelNormalStrength = serializedObject.FindProperty("fresnelNormalStrength");
         specularNormalStrength = serializedObject.FindProperty("specularNormalStrength");
+        useTextureForFresnel = serializedObject.FindProperty("useTextureForFresnel");
+        environmentTexture = serializedObject.FindProperty("environmentTexture");
 
 
     }
@@ -327,13 +330,14 @@ public class OceanEditor : Editor {
         EditorGUILayout.Slider(shininess, 0.0f, 100.0f, new GUIContent("Shininess"));
         EditorGUILayout.Slider(specularNormalStrength, 0.0f, 5.0f, new GUIContent("Specular Normal Strength"));
         EditorGUILayout.PropertyField(fresnelColor);
+        EditorGUILayout.PropertyField(environmentTexture);
+        EditorGUILayout.PropertyField(useTextureForFresnel);
         EditorGUILayout.Slider(fresnelBias, 0.0f, 1.0f, new GUIContent("Fresnel Bias"));
         EditorGUILayout.Slider(fresnelStrength, 0.0f, 1.0f, new GUIContent("Fresnel Strength"));
         EditorGUILayout.Slider(fresnelShininess, 0.0f, 20.0f, new GUIContent("Fresnel Shininess"));
         EditorGUILayout.Slider(fresnelNormalStrength, 0.0f, 5.0f, new GUIContent("Fresnel Normal Strength"));
         EditorGUILayout.PropertyField(tipColor);
         EditorGUILayout.Slider(tipAttenuation, 0.0f, 5.0f, new GUIContent("Tip Attenuation"));
-        EditorGUILayout.Slider(absorptionCoefficient, 0.0f, 2.0f, new GUIContent("Absorption Coefficient"));
 
         serializedObject.ApplyModifiedProperties();
     }
