@@ -26,7 +26,7 @@ RenderSettings:
   m_AmbientIntensity: 1
   m_AmbientMode: 0
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
-  m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
+  m_SkyboxMaterial: {fileID: 2100000, guid: 219c895e580b00549896ff2d149427fa, type: 2}
   m_HaloStrength: 0.5
   m_FlareStrength: 1
   m_FlareFadeSpeed: 3
@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.18028378, g: 0.22571412, b: 0.30692285, a: 1}
+  m_IndirectSpecularColor: {r: 0.12076032, g: 0.18643649, b: 0.3352496, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -151,7 +151,7 @@ Light:
   serializedVersion: 10
   m_Type: 1
   m_Shape: 0
-  m_Color: {r: 0.8392157, g: 0.9706921, b: 1, a: 1}
+  m_Color: {r: 0.8392157, g: 0.89411765, b: 1, a: 1}
   m_Intensity: 1
   m_Range: 10
   m_SpotAngle: 30
@@ -334,6 +334,7 @@ GameObject:
   - component: {fileID: 453426268}
   - component: {fileID: 453426267}
   - component: {fileID: 453426270}
+  - component: {fileID: 453426271}
   m_Layer: 0
   m_Name: Ocean
   m_TagString: Untagged
@@ -412,7 +413,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 453426265}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3713f0ac1e487824e9049c31726ca748, type: 3}
   m_Name: 
@@ -447,7 +448,7 @@ MonoBehaviour:
   resolution: 10
   planeSize: 100
   shader: {fileID: 4800000, guid: 44d5a78bb5869ac4ab4bd1e8f946a8fa, type: 3}
-  atmosphere: {fileID: 0}
+  atmosphere: {fileID: 1276858846}
   usingVertexDisplacement: 1
   usingPixelShaderNormals: 1
   usingCircularWaves: 0
@@ -492,16 +493,48 @@ MonoBehaviour:
   ambient: {r: 0, g: 0, b: 0, a: 0}
   diffuseReflectance: {r: 1, g: 1, b: 1, a: 0}
   specularReflectance: {r: 1, g: 1, b: 1, a: 0}
-  shininess: 80
+  shininess: 0
   specularNormalStrength: 1
   fresnelColor: {r: 1, g: 1, b: 1, a: 0}
-  fresnelBias: 0.02
+  useTextureForFresnel: 0
+  environmentTexture: {fileID: 8900000, guid: 8a293ce833d584fc98516e0e74f495a4, type: 3}
+  fresnelBias: 0
+  fresnelStrength: 0
+  fresnelShininess: 0
+  fresnelNormalStrength: 0
+  tipColor: {r: 0, g: 0, b: 0, a: 0}
+  tipAttenuation: 0
+--- !u!114 &453426271
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 453426265}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3fe6526126c12914c970b655ed53e939, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  waterShader: {fileID: 4800000, guid: 00faed8bb1161c64089ae251c5fb69e6, type: 3}
+  atmosphere: {fileID: 1276858846}
+  planeLength: 10
+  quadRes: 10
+  normalStrength: 1
+  ambient: {r: 0, g: 0, b: 0, a: 0}
+  diffuseReflectance: {r: 0, g: 0, b: 0, a: 0}
+  specularReflectance: {r: 0, g: 0, b: 0, a: 0}
+  shininess: 1
+  specularNormalStrength: 1
+  fresnelColor: {r: 0, g: 0, b: 0, a: 0}
+  useTextureForFresnel: 1
+  environmentTexture: {fileID: 8900000, guid: 8a293ce833d584fc98516e0e74f495a4, type: 3}
+  fresnelBias: 0
   fresnelStrength: 1
   fresnelShininess: 5
   fresnelNormalStrength: 1
   tipColor: {r: 0, g: 0, b: 0, a: 0}
-  tipAttenuation: 0
-  absorptionCoefficient: 0
+  tipAttenuation: 1
 --- !u!1 &966846951
 GameObject:
   m_ObjectHideFlags: 0
@@ -644,8 +677,8 @@ Camera:
   m_GameObject: {fileID: 1276858841}
   m_Enabled: 1
   serializedVersion: 2
-  m_ClearFlags: 2
-  m_BackGroundColor: {r: 0.22107512, g: 0.39925238, b: 0.6792453, a: 0}
+  m_ClearFlags: 1
+  m_BackGroundColor: {r: 0.8392157, g: 0.89411765, b: 1, a: 0}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
   m_FOVAxisMode: 0
@@ -757,8 +790,8 @@ MonoBehaviour:
   skyboxTex: {fileID: 8900000, guid: 8a293ce833d584fc98516e0e74f495a4, type: 3}
   skyboxDirection: {x: 0, y: -1, z: 0}
   skyboxSpeed: 0.1
-  sunDirection: {x: 0, y: 1, z: 0}
-  sunColor: {r: 0, g: 0, b: 0, a: 0}
+  sunDirection: {x: 0, y: -1, z: 0.5}
+  sunColor: {r: 1, g: 1, b: 1, a: 0}
   fogHeight: 500
   fogAttenuation: 1.2
   fogColor: {r: 0, g: 0, b: 0, a: 0}
