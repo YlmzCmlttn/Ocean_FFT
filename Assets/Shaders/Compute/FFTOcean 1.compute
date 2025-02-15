@@ -1,0 +1,156 @@
+﻿// Specify the kernel entry point.
+#pragma kernel CSMain
+
+// Define PI constant.
+#define PI 3.14159265358979323846
+
+// Declare two read-write 2D textures (RenderTextures) for storing the computed height and normal data.
+// These textures are expected to be bound by the C# script.
+RWTexture2D<float4> _HeightTex, _NormalTex;
+
+// Uniform variable to pass the current time (or frame time) from the CPU.
+float _FrameTime;
+
+//////////////////////////////////////////////////////////////////////////////
+// Helper Functions
+//////////////////////////////////////////////////////////////////////////////
+
+// ComplexMult multiplies two complex numbers represented as float2 (x = real, y = imaginary).
+float2 ComplexMult(float2 a, float2 b) {
+    // (a.real * b.real - a.imag * b.imag, a.real * b.imag + a.imag * b.real)
+    return float2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+// EulerFormula returns the complex exponential e^(ix) as a float2 (cos(x), sin(x)).
+float2 EulerFormula(float x) {
+    return float2(cos(x), sin(x));
+}
+
+// hash() is a pseudo-random number generator that returns a float in [0, 1].
+// It uses bit manipulation on an unsigned integer input.
+float hash(uint n) {
+    // Integer hash copied from Hugo Elias.
+    n = (n << 13U) ^ n;
+    n = n * (n * n * 15731U + 0x789221U) + 0x1376312589U;
+    return float(n & uint(0x7fffffffU)) / float(0x7fffffff);
+}
+
+// UniformToGaussian converts two uniform random numbers (in [0,1]) to a 2D Gaussian (normal) distributed value
+// using the Box-Muller transform.
+float2 UniformToGaussian(float u1, float u2) {
+    // R is computed from the negative logarithm of u1.
+    float R = sqrt(-2.0f * log(u1));
+    // Theta is uniformly distributed between 0 and 2π.
+    float theta = 2.0f * PI * u2;
+    // Return the Gaussian-distributed pair.
+    return float2(R * cos(theta), R * sin(theta));
+}
+
+// PhillipsSpectrum computes the spectral density of the ocean surface waves for a given wave vector k.
+// This is based on the Phillips spectrum model, which provides realistic wave statistics.
+float PhillipsSpectrum(float2 k) {
+    float kMag = length(k); // Magnitude of wave vector.
+    if (kMag < 0.001f) return 0.0f; // Avoid division by near-zero.
+    
+    // Constant A controls the overall amplitude.
+    float A = 20.0f;
+    // Wind speed (V) and gravity (g = 9.8) determine the characteristic length scale L.
+    float V = 2.0f;
+    float L = V * V / 9.8f;
+    // Assume wind direction is diagonal (1,1) and normalize it.
+    float2 w = normalize(float2(1.0f, 1.0f));
+    // Dot product of normalized k and wind direction.
+    float kdotw = dot(normalize(k), w);
+    
+    // Return the Phillips spectrum value.
+    return A * (exp(-1.0f / ((kMag * L) * (kMag * L))) / (kMag * kMag * kMag * kMag)) * (kdotw * kdotw);
+}
+
+// ComplexWave computes the complex amplitude for a wave component at wave vector k.
+// 'rand' is a 2D Gaussian random number used to randomize the phase and amplitude.
+float2 ComplexWave(float2 k, float2 rand) {
+    // Scale the random number by the square root of the Phillips spectrum,
+    // normalized by sqrt(2) to maintain proper variance.
+    return (1.0f / sqrt(2.0f)) * rand * sqrt(PhillipsSpectrum(k));
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// Main Compute Shader Kernel
+//////////////////////////////////////////////////////////////////////////////
+
+// Specify the number of threads per thread group (8x8 in this case).
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    // Create a seed based on the current thread's 2D index.
+    // The offset "512" is added to avoid very small seed values.
+    uint seed = id.x + 512 * id.y + 512;
+    
+    // Define the spatial scale of the simulation.
+    float LengthScale = 1024.0f;
+
+    // Set simulation resolution parameters.
+    // N is the total resolution (assumed to be 512 in each dimension).
+    float N = 512;
+    float halfN = N / 2.0f;
+
+    // Compute coordinates relative to the center of the domain.
+    float n = id.x - N / 2.0f;
+    float m = id.y - N / 2.0f;
+
+    // Compute the wave vector K from the pixel coordinates.
+    // Multiply by (2π / LengthScale) to convert discrete indices to continuous wave numbers.
+    float2 K = float2(n, m) * 2.0f * PI / LengthScale;
+
+    // Compute the Phillips spectrum for the wave vector K.
+    float P = PhillipsSpectrum(K);
+
+    // Generate four random samples using the hash function.
+    float4 uniformRandSamples = float4(
+        hash(seed), 
+        hash(seed * seed), 
+        hash(seed * seed * seed), 
+        hash(seed * seed * seed * 0.25)
+    );
+    // Convert two pairs of uniform random samples into Gaussian distributed random numbers.
+    float2 gauss1 = UniformToGaussian(uniformRandSamples.x, uniformRandSamples.y);
+    float2 gauss2 = UniformToGaussian(uniformRandSamples.z, uniformRandSamples.w);
+
+    // Compute two complex wave amplitudes for K and -K.
+    // This creates a pair of waves with conjugate symmetry.
+    float2 h1 = ComplexWave(K, float2(gauss1.x, gauss2.y));
+    float2 h2 = ComplexWave(-K, float2(gauss1.y, gauss2.x));
+
+    // Calculate the base angular frequency, related to the wave period.
+    float w_0 = 2.0f * PI / 200.0f;
+    // Compute the dispersion factor for the wave.
+    // The dispersion relation for deep water waves is given by sqrt(g * |K|).
+    // We then floor the value divided by w_0 and multiply by w_0 to quantize it,
+    // then multiply by _FrameTime to animate the wave over time.
+    float dispersion = floor(sqrt(9.8f * length(K)) / w_0) * w_0 * _FrameTime;
+
+    // Combine the two wave components with time evolution.
+    // Each component is multiplied by a phase factor computed from Euler's formula.
+    float2 h = ComplexMult(h1, EulerFormula(dispersion)) +
+               ComplexMult(h2, EulerFormula(-dispersion));
+
+    // Write the real part of the complex wave amplitude to the height texture.
+    _HeightTex[id.xy] = h.x;
+
+    // --- (Optional) Normal Calculation ---
+    // Define a fixed direction vector (here, (-1, 1)) and normalize it.
+    float2 d = float2(-1, 1);
+    d = normalize(d);
+    
+    // Calculate a derivative or a secondary value using a cosine function.
+    // This line is commented out in favor of using the computed wave values.
+    // _HeightTex[id.xy] = sin(dot(d, id.xy) * 0.015f + _FrameTime * 2) * 0.5f;
+
+    // Compute an auxiliary value for normals (not used in the final output in this version).
+    float2 dw = d * cos(dot(d, id.xy) * 0.015f + _FrameTime * 2) * 0.5f;
+    
+    // Write the complex wave amplitude (both real and imaginary parts) into the normal texture.
+    // Here, the R channel gets h.x and the G channel gets h.y.
+    // (This can later be interpreted as a perturbation vector for normals.)
+    _NormalTex[id.xy] = float4(h, 0, 0);
+}

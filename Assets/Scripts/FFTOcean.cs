@@ -62,6 +62,7 @@ public class FFTOcean : MonoBehaviour
     private RenderTexture heightTex, normalTex;
 
 
+
     private void CreateWaterPlane() {
         GetComponent<MeshFilter>().mesh = mesh = new Mesh();
         mesh.name = "Water";
@@ -131,13 +132,16 @@ public class FFTOcean : MonoBehaviour
 
         fftComputeShader.SetTexture(0, "_HeightTex", heightTex);
         fftComputeShader.SetTexture(0, "_NormalTex", normalTex);
+
+        fftComputeShader.SetFloat("_DirX", 1);
+        fftComputeShader.SetFloat("_DirY", 0);
         fftComputeShader.Dispatch(0, Mathf.CeilToInt(512 / 8.0f), Mathf.CeilToInt(512 / 8.0f), 1);
     }
 
     void Update() {
         // Assign height texture to the debug material
         Material debugMat = debugQuad.GetComponent<Renderer>().material;
-        debugMat.SetTexture("_HeightTex", heightTex);
+        debugMat.SetTexture("_DebugTexture", heightTex);
 
         waterMaterial.SetVector("_Ambient", ambient);
         waterMaterial.SetVector("_DiffuseReflectance", diffuseReflectance);

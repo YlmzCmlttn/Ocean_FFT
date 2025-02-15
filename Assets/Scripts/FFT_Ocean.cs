@@ -23,6 +23,12 @@ public class FFT_Ocean : MonoBehaviour
 
     private RenderTexture heightTex, normalTex;
 
+    public float _Wind_DirX;
+    public float _Wind_DirY;
+    public float _WindSpeed;
+    public float _A;
+
+
     private void CreateWaterPlane() {
         GetComponent<MeshFilter>().mesh = mesh = new Mesh();
         mesh.name = "Water";
@@ -91,6 +97,10 @@ public class FFT_Ocean : MonoBehaviour
         fftComputeShader.SetTexture(0, "_HeightTex", heightTex);
         fftComputeShader.SetTexture(0, "_NormalTex", normalTex);
         fftComputeShader.SetFloat("_FrameTime", Time.time);
+        fftComputeShader.SetFloat("_Wind_DirX", _Wind_DirX);
+        fftComputeShader.SetFloat("_Wind_DirY", _Wind_DirY);
+        fftComputeShader.SetFloat("_WindSpeed", _WindSpeed);
+        fftComputeShader.SetFloat("_A", _A);
         fftComputeShader.Dispatch(0, Mathf.CeilToInt(512 / 8.0f), Mathf.CeilToInt(512 / 8.0f), 1);
 
         waterMaterial.SetTexture("_HeightTex", heightTex);
@@ -103,6 +113,10 @@ public class FFT_Ocean : MonoBehaviour
         fftComputeShader.SetTexture(0, "_HeightTex", heightTex);
         fftComputeShader.SetTexture(0, "_NormalTex", normalTex);
         fftComputeShader.SetFloat("_FrameTime", Time.time);
+        fftComputeShader.SetFloat("_Wind_DirX", _Wind_DirX);
+        fftComputeShader.SetFloat("_Wind_DirY", _Wind_DirY);
+        fftComputeShader.SetFloat("_WindSpeed", _WindSpeed);
+        fftComputeShader.SetFloat("_A", _A);
         fftComputeShader.Dispatch(0, Mathf.CeilToInt(512 / 8.0f), Mathf.CeilToInt(512 / 8.0f), 1);
         waterMaterial.SetTexture("_HeightTex", heightTex);
         waterMaterial.SetTexture("_NormalTex", normalTex);
