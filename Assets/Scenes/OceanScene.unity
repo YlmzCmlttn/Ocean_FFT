@@ -558,10 +558,8 @@ MonoBehaviour:
   quadRes: 10
   _Wind_DirX: 1
   _Wind_DirY: 1
-  _WaveX: 1
-  _WaveY: 1
-  _WindSpeed: 1
-  _A: 1
+  _WindSpeed: 2
+  _A: 20
 --- !u!1 &966846951
 GameObject:
   m_ObjectHideFlags: 0
