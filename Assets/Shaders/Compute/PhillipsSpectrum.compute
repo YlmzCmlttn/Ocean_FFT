@@ -1,20 +1,12 @@
-
-/*
-Practical Use:
-In ocean simulation, this scalar P(k)
-P(k) is used to determine the amplitude of each wave in a Fourier-based approach. 
-Typically, you would take the square root of Pk
-P(k) to get the amplitude, multiply by a random factor (often Gaussian distributed) to add randomness, 
-and then use an inverse FFT to transform the frequency domain data 
-into a spatial height field representing the ocean surface.
-
-*/
-
-#pragma kernel CS_CalculateInitialSpectrum
+﻿#pragma kernel CS_CalculateInitialSpectrum
+#pragma kernel CS_UpdateSpectrum
+#pragma kernel CS_ComputeHeightMap
 
 #include "HelperFunctions.hlsl"
 
 RWTexture2D<float4> _InitialSpectrumTexture;
+RWTexture2D<float2> _UpdatedSpectrumTexture;
+RWTexture2D<float4> _HeightMap;
 float _FrameTime;
 float _Wind_DirX;
 float _Wind_DirY;
@@ -75,4 +67,87 @@ void CS_CalculateInitialSpectrum (uint3 id : SV_DispatchThreadID) {
 
 
     _InitialSpectrumTexture[id.xy] = float4(h0,h0_conjugate);    
+}
+
+[numthreads(8,8,1)]
+void CS_UpdateSpectrum(uint3 id : SV_DISPATCHTHREADID) {
+    float4 initialSpectrum = _InitialSpectrumTexture[id.xy];
+    float2 h0 = initialSpectrum.xy;
+    float2 h0conj = initialSpectrum.zw;
+
+    const float n = id.x - _Resolution/2.0f;
+    const float m = id.y - _Resolution/2.0f;
+
+    const float2 WaveVector = float2(n,m) * 2.0 * PI / _PhysicalDomainLength;
+    float gravity = 9.8f;
+    const float omega = sqrt(gravity * length(WaveVector));
+    float phase = omega * _FrameTime;
+
+    float2 exp_iwt = EulerFormula(phase);
+    float2 exp_iwt_neg = EulerFormula(-phase);
+
+    // First term: h0(k)*exp(iωt)
+    float2 term1 = ComplexMultiplication(h0, exp_iwt);
+    // Second term: conj(h0(-k))*exp(-iωt)
+    float2 term2 = ComplexMultiplication(h0conj, exp_iwt_neg);
+
+    _UpdatedSpectrumTexture[id.xy] = term1 + term2;
+
+}
+
+// Direct Inverse DFT: For each spatial coordinate, sum over all frequency modes.
+[numthreads(8,8,1)]
+void CS_ComputeHeightMap(uint3 id : SV_DispatchThreadID)
+{
+    // Ensure we're within the valid output domain.
+    if (id.x >= _Resolution || id.y >= _Resolution)
+        return;
+
+    // Map the output pixel to a spatial position.
+    // We'll assume the spatial domain is centered at zero.
+    float spacing = _PhysicalDomainLength / _Resolution;
+    float xPos = (id.x - _Resolution / 2.0) * spacing;
+    float yPos = (id.y - _Resolution / 2.0) * spacing;
+    float2 position = float2(xPos, yPos);
+
+    float heightSum = 0.0;
+
+    // Loop over all frequency components.
+    // kx and ky are indices in the Fourier domain.
+    for (int kx = 0; kx < _Resolution; kx++)
+    {
+        for (int ky = 0; ky < _Resolution; ky++)
+        {
+            // Map Fourier index (kx, ky) to frequency space.
+            // Center the spectrum: indices run from -N/2 to +N/2.
+            float n = kx - _Resolution / 2.0;
+            float m = ky - _Resolution / 2.0;
+            // Wave vector: k = (n, m) * (2π / _PhysicalDomainLength)
+            float2 waveVector = float2(n, m) * (2.0 * PI / _PhysicalDomainLength);
+
+            // Read the Fourier coefficient (complex value) for this mode.
+            float2 h_k = _UpdatedSpectrumTexture[int2(kx, ky)];
+
+            // Compute the phase: φ = k ⋅ x.
+            float phase = dot(waveVector, position);
+
+            // Compute e^(i * phase) = cos(phase) + i sin(phase).
+            float2 exp_iphi = float2(cos(phase), sin(phase));
+
+            // Complex multiplication: h_k * e^(i*phase)
+            // (a+ib)*(c+id) = (ac - bd) + i(ad+bc)
+            float realPart = h_k.x * exp_iphi.x - h_k.y * exp_iphi.y;
+            // float imagPart = h_k.x * exp_iphi.y + h_k.y * exp_iphi.x; // (Not used)
+
+            // Sum up the real contribution.
+            heightSum += realPart;
+        }
+    }
+
+    // Normalize by the number of modes.
+    float N2 = _Resolution * _Resolution;
+    float height = heightSum / N2;
+
+    // Write the computed height to the output height map.
+    _HeightMap[id.xy] = heightSum/_Resolution;
 }
