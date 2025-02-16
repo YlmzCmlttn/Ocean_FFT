@@ -10,16 +10,18 @@ into a spatial height field representing the ocean surface.
 
 */
 
-#pragma kernel CSMain
+#pragma kernel CS_CalculateInitialSpectrum
 
 #include "HelperFunctions.hlsl"
 
-RWTexture2D<float4> _HeightTex, _NormalTex;
+RWTexture2D<float4> _InitialSpectrumTexture;
 float _FrameTime;
 float _Wind_DirX;
 float _Wind_DirY;
 float _WindSpeed;
 float _A;
+int _PhysicalDomainLength;
+int _Resolution;
 
 
 
@@ -46,26 +48,31 @@ float2 GenerateInitialFourierCoefficient(uint3 id, float2 waveVector,float Resol
     return gauss * amplitude;
 }
 
-
+float2 CalculateTextureSample(float2 WaveVector,float A, float WindSpeed, float2 WindDirection, float2 randomNumber){
+    return (1.0f / sqrt(2.0f)) * randomNumber * sqrt(PhillipsSpectrum(A,WindSpeed,WindDirection,WaveVector));
+}
 
 
 
 [numthreads(8,8,1)]
 void CS_CalculateInitialSpectrum (uint3 id : SV_DispatchThreadID) {
-    float PhysicalDomainLength = 1024.0;
-    float Resolution = 512.0;
-    float n = id.x - Resolution/2.0f;
-    float m = id.y - Resolution/2.0f;
+    const uint seed = id.x + _Resolution * id.y;
+    const float n = id.x - _Resolution/2.0f;
+    const float m = id.y - _Resolution/2.0f;
 
-    float2 WaveVector = float2(n,m) * 2.0 * PI / PhysicalDomainLength;
+
+
+    const float2 WaveVector = float2(n,m) * 2.0 * PI / _PhysicalDomainLength;
     //Calculates PhillipsSpectrum 
-    float P = PhillipsSpectrum(_A,_WindSpeed,float2(_Wind_DirX,_Wind_DirY),WaveVector);
-
-    //Generate the Initial Fourier Coefficients
-
-    _HeightTex[id.xy] = P;
-    //_HeightTex[id.xy] = UniformToGaussian(float2(id.x/Resolution,id.y/Resolution)).xy;
-
-
+    const float P = PhillipsSpectrum(_A,_WindSpeed,float2(_Wind_DirX,_Wind_DirY),WaveVector);
+    const float sqrtP = sqrt(P);
+    float4 uniforms = float4(hashFloat(seed),hashFloat(seed*seed),hashFloat(seed+1),hashFloat((seed+1)*(seed+1)));
     
+    const float4 gaussianRandomComplexNumbers = float4(UniformToGaussian(uniforms.x,uniforms.y),UniformToGaussian(uniforms.z,uniforms.w));
+
+    float2 h0 = CalculateTextureSample(WaveVector,_A,_WindSpeed,float2(_Wind_DirX,_Wind_DirY),gaussianRandomComplexNumbers.xz);
+    float2 h0_conjugate = CalculateTextureSample(-WaveVector,_A,_WindSpeed,float2(_Wind_DirX,_Wind_DirY),gaussianRandomComplexNumbers.xz);
+
+
+    _InitialSpectrumTexture[id.xy] = float4(h0,h0_conjugate);    
 }
