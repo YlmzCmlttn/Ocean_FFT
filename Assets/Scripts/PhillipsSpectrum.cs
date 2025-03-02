@@ -10,9 +10,12 @@ public class PhillipsSpectrum : MonoBehaviour
     public GameObject initialSpectrumDebugQuad;
     public GameObject updatedSpectrumDebugQuad;
     public GameObject heightMapDebugQuad;
+    public GameObject normalMapDebugQuad;
+
     private RenderTexture initialSpectrumTexture;
     private RenderTexture updatedSpectrumTexture;
     private RenderTexture heightMapTexture;
+    private RenderTexture normalMapTexture;
 
 
     public float _Wind_DirX = -1.0f;
@@ -27,8 +30,6 @@ public class PhillipsSpectrum : MonoBehaviour
     private int CalculateInitialSpectrumKernelIndex;
     private int UpdateSpectrumKernelIndex;
     private int HeightMapKernelIndex;
-
-
 
     private void OnEnable() {
         threadGroupsX = Mathf.CeilToInt(_Resolution / 8.0f);
@@ -45,6 +46,10 @@ public class PhillipsSpectrum : MonoBehaviour
         heightMapTexture = new RenderTexture(_Resolution, _Resolution, 0, RenderTextureFormat.RHalf, RenderTextureReadWrite.Linear);
         heightMapTexture.enableRandomWrite = true;
         heightMapTexture.Create();
+
+        normalMapTexture = new RenderTexture(_Resolution, _Resolution, 0, RenderTextureFormat.RHalf, RenderTextureReadWrite.Linear);
+        normalMapTexture.enableRandomWrite = true;
+        normalMapTexture.Create();
 
         
 
@@ -82,6 +87,7 @@ public class PhillipsSpectrum : MonoBehaviour
 
         fftComputeShader.SetTexture(HeightMapKernelIndex, "_UpdatedSpectrumTexture", updatedSpectrumTexture);
         fftComputeShader.SetTexture(HeightMapKernelIndex, "_HeightMap", heightMapTexture);
+        fftComputeShader.SetTexture(HeightMapKernelIndex, "_NormalMap", normalMapTexture);
         fftComputeShader.Dispatch(HeightMapKernelIndex, threadGroupsX, threadGroupsY, 1);
 
         
@@ -90,6 +96,9 @@ public class PhillipsSpectrum : MonoBehaviour
 
         Material debugMat2 = heightMapDebugQuad.GetComponent<Renderer>().material;
         debugMat2.SetTexture("_DebugTexture", heightMapTexture);
+
+        Material debugMat3 = normalMapDebugQuad.GetComponent<Renderer>().material;
+        debugMat3.SetTexture("_DebugTexture", normalMapTexture);
     }
 
     // Update is called once per frame

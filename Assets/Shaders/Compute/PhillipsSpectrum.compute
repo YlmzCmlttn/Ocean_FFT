@@ -7,6 +7,7 @@
 RWTexture2D<float4> _InitialSpectrumTexture;
 RWTexture2D<float2> _UpdatedSpectrumTexture;
 RWTexture2D<float4> _HeightMap;
+RWTexture2D<float4> _NormalMap;
 float _FrameTime;
 float _Wind_DirX;
 float _Wind_DirY;
@@ -111,6 +112,7 @@ void CS_ComputeHeightMap(uint3 id : SV_DispatchThreadID)
     float2 position = float2(xPos, yPos);
 
     float heightSum = 0.0;
+    float2 normal = 0.0f;
 
     // Loop over all frequency components.
     // kx and ky are indices in the Fourier domain.
@@ -132,15 +134,20 @@ void CS_ComputeHeightMap(uint3 id : SV_DispatchThreadID)
             float phase = dot(waveVector, position);
 
             // Compute e^(i * phase) = cos(phase) + i sin(phase).
-            float2 exp_iphi = float2(cos(phase), sin(phase));
+            //float2 exp_iphi = float2(cos(phase), sin(phase));
+            float2 exp_iphi = EulerFormula(phase);
 
             // Complex multiplication: h_k * e^(i*phase)
             // (a+ib)*(c+id) = (ac - bd) + i(ad+bc)
-            float realPart = h_k.x * exp_iphi.x - h_k.y * exp_iphi.y;
+            //float realPart = h_k.x * exp_iphi.x - h_k.y * exp_iphi.y;
             // float imagPart = h_k.x * exp_iphi.y + h_k.y * exp_iphi.x; // (Not used)
+            float2 hTilde = ComplexMultiplication(h_k,exp_iphi);
+            float realPart = hTilde.x;
+
 
             // Sum up the real contribution.
             heightSum += realPart;
+            normal += float2(-waveVector.x*hTilde.y,-waveVector.y*hTilde.y);
         }
     }
 
@@ -148,6 +155,11 @@ void CS_ComputeHeightMap(uint3 id : SV_DispatchThreadID)
     float N2 = _Resolution * _Resolution;
     float height = heightSum / N2;
 
+    float3 normal_result = float3(-normal.x,1.0f,-normal.y);
+    normal_result = normalize(normal_result);
+    
+
     // Write the computed height to the output height map.
     _HeightMap[id.xy] = heightSum/_Resolution;
+    _NormalMap[id.xy] = float4(normal_result,0.0f);
 }
