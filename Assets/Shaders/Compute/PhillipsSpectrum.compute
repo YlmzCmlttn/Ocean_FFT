@@ -15,56 +15,56 @@ float _WindSpeed;
 float _A;
 int _PhysicalDomainLength;
 int _Resolution;
+float _Gravity;
+float _RepeatTime;
+float _Damping;
+int _Seed;
+float2 _MovementLambda;
 
 
 
-
-// Generate the initial Fourier coefficient h0(k) as a complex number.
-// h0(k) = 1/sqrt(2) * sqrt(P(k)) * (Gaussian random complex number)
-float2 GenerateInitialFourierCoefficient(uint3 id, float2 waveVector,float Resolution)
+float PhillipsSpectrum(float A,float windSpeed,float2 windDirection, float2 waveVector)
 {
-    // Create a unique seed based on the thread's coordinates:
-    uint seed = id.x + id.y * (uint)Resolution;
+    float magnitudeOfWaveVector = length(waveVector);
+    if(magnitudeOfWaveVector < 0.0001f) return 0.0f;
+
+    float L = windSpeed * windSpeed / 9.8f;
+    float2 unitVectorOfWindDirection = normalize(windDirection);
+    float DotProduct_Of_Normalize_Both_WaveVector_And_WindDirection = dot(normalize(waveVector),unitVectorOfWindDirection);
+    float k = magnitudeOfWaveVector;
+    float kw = DotProduct_Of_Normalize_Both_WaveVector_And_WindDirection;
+
+    float damping = _Damping;
+    float l2 = L*L * damping * damping;
+    float k2 = k * k;
     
-    // Generate two random floats in [0, 1]:
-    float u1 = hashFloat(seed);
-    float u2 = hashFloat(seed + 1);
-    
-    // Convert to a Gaussian random complex number (with zero mean, unit variance):
-    float2 gauss = UniformToGaussian(u1, u2);
-    
-    // Compute the Phillips spectrum for this wave vector:
-    float P = PhillipsSpectrum(_A, _WindSpeed, float2(_Wind_DirX, _Wind_DirY), waveVector);
-    
-    // Scale the random number by sqrt(P) and normalize:
-    float amplitude = sqrt(P) / sqrt(2.0);
-    return gauss * amplitude;
+    return A * exp(-1.0f/((k*L)*(k*L))) / (k*k*k*k) * (kw*kw)* (kw*kw)* (kw*kw)  * exp(-k2 * l2);
 }
+
 
 float2 CalculateTextureSample(float2 WaveVector,float A, float WindSpeed, float2 WindDirection, float2 randomNumber){
     return (1.0f / sqrt(2.0f)) * randomNumber * sqrt(PhillipsSpectrum(A,WindSpeed,WindDirection,WaveVector));
 }
 
 
-
 [numthreads(8,8,1)]
 void CS_CalculateInitialSpectrum (uint3 id : SV_DispatchThreadID) {
-    const uint seed = id.x + _Resolution * id.y;
+    const uint seed = id.x + _Resolution * id.y + _Seed;
+
     const float n = id.x - _Resolution/2.0f;
     const float m = id.y - _Resolution/2.0f;
-
 
 
     const float2 WaveVector = float2(n,m) * 2.0 * PI / _PhysicalDomainLength;
     //Calculates PhillipsSpectrum 
     const float P = PhillipsSpectrum(_A,_WindSpeed,float2(_Wind_DirX,_Wind_DirY),WaveVector);
     const float sqrtP = sqrt(P);
-    float4 uniforms = float4(hashFloat(seed),hashFloat(seed*seed),hashFloat(seed+1),hashFloat((seed+1)*(seed+1)));
+    float4 uniforms = float4(hashFloat(seed),hashFloat(seed*2),hashFloat(seed*3),hashFloat(seed*4));
     
     const float4 gaussianRandomComplexNumbers = float4(UniformToGaussian(uniforms.x,uniforms.y),UniformToGaussian(uniforms.z,uniforms.w));
 
-    float2 h0 = CalculateTextureSample(WaveVector,_A,_WindSpeed,float2(_Wind_DirX,_Wind_DirY),gaussianRandomComplexNumbers.xz);
-    float2 h0_conjugate = CalculateTextureSample(-WaveVector,_A,_WindSpeed,float2(_Wind_DirX,_Wind_DirY),gaussianRandomComplexNumbers.xz);
+    float2 h0 = CalculateTextureSample(WaveVector,_A,_WindSpeed,float2(_Wind_DirX,_Wind_DirY),gaussianRandomComplexNumbers.xw);
+    float2 h0_conjugate = CalculateTextureSample(-WaveVector,_A,_WindSpeed,float2(_Wind_DirX,_Wind_DirY),gaussianRandomComplexNumbers.yz);
 
 
     _InitialSpectrumTexture[id.xy] = float4(h0,h0_conjugate);    
@@ -80,8 +80,8 @@ void CS_UpdateSpectrum(uint3 id : SV_DISPATCHTHREADID) {
     const float m = id.y - _Resolution/2.0f;
 
     const float2 WaveVector = float2(n,m) * 2.0 * PI / _PhysicalDomainLength;
-    float gravity = 9.8f;
-    const float omega = sqrt(gravity * length(WaveVector));
+    float w_0 = 2.0f * PI / _RepeatTime;
+    const float omega = floor(sqrt(_Gravity * length(WaveVector)) / w_0) * w_0;
     float phase = omega * _FrameTime;
 
     float2 exp_iwt = EulerFormula(phase);
@@ -100,35 +100,35 @@ void CS_UpdateSpectrum(uint3 id : SV_DISPATCHTHREADID) {
 [numthreads(8,8,1)]
 void CS_ComputeHeightMap(uint3 id : SV_DispatchThreadID)
 {
-    // Ensure we're within the valid output domain.
-    if (id.x >= _Resolution || id.y >= _Resolution)
-        return;
+    
 
     // Map the output pixel to a spatial position.
     // We'll assume the spatial domain is centered at zero.
-    float spacing = _PhysicalDomainLength / _Resolution;
-    float xPos = (id.x - _Resolution / 2.0) * spacing;
-    float yPos = (id.y - _Resolution / 2.0) * spacing;
+    //float spacing = _PhysicalDomainLength / _Resolution;
+    float xPos = (id.x - _Resolution / 2.0);
+    float yPos = (id.y - _Resolution / 2.0);
     float2 position = float2(xPos, yPos);
 
     float heightSum = 0.0;
     float2 normal = 0.0f;
+    float2 displacement = 0.0f;
 
     // Loop over all frequency components.
-    // kx and ky are indices in the Fourier domain.
-    for (int kx = 0; kx < _Resolution; kx++)
+    // m and n are indices in the Fourier domain.
+    for (int m = 0; m < _Resolution; m++)
     {
-        for (int ky = 0; ky < _Resolution; ky++)
+        float kz = (m - _Resolution/2.0);
+        for (int n = 0; n < _Resolution; n++)
         {
-            // Map Fourier index (kx, ky) to frequency space.
+            // Map Fourier index (m, n) to frequency space.
             // Center the spectrum: indices run from -N/2 to +N/2.
-            float n = kx - _Resolution / 2.0;
-            float m = ky - _Resolution / 2.0;
-            // Wave vector: k = (n, m) * (2π / _PhysicalDomainLength)
-            float2 waveVector = float2(n, m) * (2.0 * PI / _PhysicalDomainLength);
+            float kx = (n - _Resolution/2.0);
+            // Wave vector: k = (kx, kz) * (2π / _PhysicalDomainLength)
+
+            float2 waveVector = float2(kx, kz) * (2.0 * PI / _PhysicalDomainLength);
 
             // Read the Fourier coefficient (complex value) for this mode.
-            float2 h_k = _UpdatedSpectrumTexture[int2(kx, ky)];
+            float2 h_k = _UpdatedSpectrumTexture[uint2(n, m)];
 
             // Compute the phase: φ = k ⋅ x.
             float phase = dot(waveVector, position);
@@ -148,18 +148,22 @@ void CS_ComputeHeightMap(uint3 id : SV_DispatchThreadID)
             // Sum up the real contribution.
             heightSum += realPart;
             normal += float2(-waveVector.x*hTilde.y,-waveVector.y*hTilde.y);
+            float waveMag = length(waveVector);
+            if (waveMag > 0.0001f)
+                displacement += waveVector / waveMag * hTilde.y;
         }
     }
 
     // Normalize by the number of modes.
-    float N2 = _Resolution * _Resolution;
-    float height = heightSum / N2;
+    //float N2 = _Resolution * _Resolution;
+    //float height = heightSum / N2;
 
     float3 normal_result = float3(-normal.x,1.0f,-normal.y);
     normal_result = normalize(normal_result);
     
 
     // Write the computed height to the output height map.
-    _HeightMap[id.xy] = heightSum/_Resolution;
+    //_HeightMap[id.xy] = heightSum;
+    _HeightMap[id.xy] = heightSum;
     _NormalMap[id.xy] = float4(normal_result,0.0f);
 }

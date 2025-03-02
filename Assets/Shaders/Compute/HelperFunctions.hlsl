@@ -2,19 +2,6 @@
 #define PI 3.14159265358979323846
 
 
-float PhillipsSpectrum(float A,float windSpeed,float2 windDirection, float2 waveVector)
-{
-    float magnitudeOfWaveVector = length(waveVector);
-    if(magnitudeOfWaveVector < 0.0001f) return 0.0f;
-
-    float L = windSpeed * windSpeed / 9.8f;
-    float2 unitVectorOfWindDirection = normalize(windDirection);
-    float DotProduct_Of_Normalize_Both_WaveVector_And_WindDirection = dot(normalize(waveVector),unitVectorOfWindDirection);
-    float k = magnitudeOfWaveVector;
-    float kw = DotProduct_Of_Normalize_Both_WaveVector_And_WindDirection;
-    
-    return A * exp(-1.0f/((k*L)*(k*L))) / (k*k*k*k) * (kw*kw);
-}
 
 // Helper: Hash function for generating pseudorandom numbers from an integer
 uint hash(uint x)

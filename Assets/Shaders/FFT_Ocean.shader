@@ -40,28 +40,28 @@ Shader "Custom/FFT_Ocean" {
 
 			
             Texture2D _HeightTex;
-            SamplerState point_repeat_sampler;
+            SamplerState point_repeat_sampler, linear_repeat_sampler;
             sampler2D _NormalTex;
 
-			#define TILE 1
+			#define TILE 0.98
 
 			v2f vp(VertexData v) {
 				v2f i;
                 i.worldPos = mul(unity_ObjectToWorld, v.vertex);
-                i.normal = normalize(UnityObjectToWorldNormal(v.normal));
-				//float2 uv = v.uv * textureSize(_HeightTex, 0);
-                //i.pos = UnityObjectToClipPos(v.vertex);
-				//i.pos = UnityObjectToClipPos(v.vertex + float3(0.0f, _HeightTex.SampleLevel(point_repeat_sampler, v.uv * TILE, 0).r, 0.0f));
-                i.pos = UnityObjectToClipPos(v.vertex);
+                i.normal = normalize(UnityObjectToWorldNormal(v.normal));				
+				float4 heightDisplacement = _HeightTex.SampleLevel(linear_repeat_sampler, v.uv * TILE + 0.01f, 0);
+
+                i.pos = UnityObjectToClipPos(v.vertex + float3(heightDisplacement.g,  heightDisplacement.r, heightDisplacement.b));
 				i.uv = v.uv;
+				//i.pos = UnityObjectToClipPos(v.vertex);
 				
 				return i;
 			}
 
 			float4 fp(v2f i) : SV_TARGET {
                 
-				return _HeightTex.Sample(point_repeat_sampler, i.uv * TILE).r;
-				//return float4(1.0f,1.0f,1.0f, 1.0f);
+				//return _HeightTex.Sample(point_repeat_sampler, i.uv * TILE).r;
+				return float4(1.0f,1.0f,1.0f, 1.0f);
 			}
 
 			ENDCG
