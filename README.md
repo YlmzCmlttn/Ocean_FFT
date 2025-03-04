@@ -1,6 +1,6 @@
 # Ocean_FFT
  
-
+FFT implementation
 High Freq damping
 Choppiness Fix with horizontal displacement
 DFT Normal and Height Calculation
