@@ -1,5 +1,16 @@
 # Ocean_FFT
  
 
+High Freq damping
+Choppiness Fix with horizontal displacement
+DFT Normal and Height Calculation
+Phillips Spectrum
+Reflection transparency
+Skybox Fog
+Fresnel implementation
+Sum of Sines implementation
 
-Blinn-Phong model lighting in shader (Lambert cosine)
+References
+
+https://github.com/GarrettGunnell/Water
+https://github.com/gasgiant/FFT-Ocean

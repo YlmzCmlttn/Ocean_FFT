@@ -1,6 +1,13 @@
 ﻿#pragma kernel CS_CalculateInitialSpectrum
-#pragma kernel CS_UpdateSpectrum
-#pragma kernel CS_ComputeHeightMap
+#pragma kernel CS_UpdateSpectrumForDFT
+#pragma kernel CS_HeightMapDFT
+
+#pragma kernel CS_UpdateSpectrumForFFT
+#pragma kernel CS_PreComputeTwiddleFactorsAndInputIndices
+#pragma kernel CS_HorizontalStepInverseFFT
+#pragma kernel CS_VerticalStepInverseFFT
+#pragma kernel CS_PermuteBuffer
+#pragma kernel CS_AssembleHeightAndNormalMaps
 
 #include "HelperFunctions.hlsl"
 
@@ -8,6 +15,20 @@ RWTexture2D<float4> _InitialSpectrumTexture;
 RWTexture2D<float2> _UpdatedSpectrumTexture;
 RWTexture2D<float4> _HeightMap;
 RWTexture2D<float4> _NormalMap;
+
+RWTexture2D<float2> _HTildeTexture;
+RWTexture2D<float2> _HTildeSlopeXAxisTexture;
+RWTexture2D<float2> _HTildeSlopeZAxisTexture;
+RWTexture2D<float2> _HTildeSlopeDisplacementXAxisTexture;
+RWTexture2D<float2> _HTildeSlopeDisplacementZAxisTexture;
+
+RWTexture2D<float4> _PrecomputeBuffer;
+Texture2D<float4> _PrecomputedData;
+RWTexture2D<float2> _Buffer0;
+RWTexture2D<float2> _Buffer1;
+bool _Swap;
+uint _Step;
+
 float _FrameTime;
 float _Wind_DirX;
 float _Wind_DirY;
@@ -20,6 +41,7 @@ float _RepeatTime;
 float _Damping;
 int _Seed;
 float2 _MovementLambda;
+float2 _NormalStrength;
 
 
 
@@ -70,8 +92,9 @@ void CS_CalculateInitialSpectrum (uint3 id : SV_DispatchThreadID) {
     _InitialSpectrumTexture[id.xy] = float4(h0,h0_conjugate);    
 }
 
+
 [numthreads(8,8,1)]
-void CS_UpdateSpectrum(uint3 id : SV_DISPATCHTHREADID) {
+void CS_UpdateSpectrumForDFT(uint3 id : SV_DISPATCHTHREADID) {
     float4 initialSpectrum = _InitialSpectrumTexture[id.xy];
     float2 h0 = initialSpectrum.xy;
     float2 h0conj = initialSpectrum.zw;
@@ -96,9 +119,11 @@ void CS_UpdateSpectrum(uint3 id : SV_DISPATCHTHREADID) {
 
 }
 
+
+
 // Direct Inverse DFT: For each spatial coordinate, sum over all frequency modes.
 [numthreads(8,8,1)]
-void CS_ComputeHeightMap(uint3 id : SV_DispatchThreadID)
+void CS_HeightMapDFT(uint3 id : SV_DispatchThreadID)
 {
     
 
@@ -166,4 +191,132 @@ void CS_ComputeHeightMap(uint3 id : SV_DispatchThreadID)
     //_HeightMap[id.xy] = heightSum;
     _HeightMap[id.xy] = heightSum;
     _NormalMap[id.xy] = float4(normal_result,0.0f);
+}
+
+
+[numthreads(8, 8, 1)]
+void CS_UpdateSpectrumForFFT(uint3 id : SV_DISPATCHTHREADID) {
+    float4 initialSpectrum = _InitialSpectrumTexture[id.xy];
+    float2 h0 = initialSpectrum.xy;
+    float2 h0conj = initialSpectrum.zw;
+
+    const float n = id.x - _Resolution/2.0f;
+    const float m = id.y - _Resolution/2.0f;
+
+    const float2 WaveVector = float2(n,m) * 2.0 * PI / _PhysicalDomainLength;
+    float WaveMag = length(WaveVector);
+
+    float w_0 = 2.0f * PI / _RepeatTime;
+    const float omega = floor(sqrt(_Gravity * WaveMag) / w_0) * w_0;
+    float phase = omega * _FrameTime;
+
+    float2 exp_iwt = EulerFormula(phase);
+    float2 exp_iwt_neg = EulerFormula(-phase);
+
+    // First term: h0(k)*exp(iωt)
+    float2 term1 = ComplexMultiplication(h0, exp_iwt);
+    // Second term: conj(h0(-k))*exp(-iωt)
+    float2 term2 = ComplexMultiplication(h0conj, exp_iwt_neg);
+
+    float2 htilde = term1 + term2;
+
+    float2 displacementX = ComplexMultiplication(htilde,float2(0,-WaveVector.x/WaveMag));
+    float2 displacementZ = ComplexMultiplication(htilde,float2(0,-WaveVector.y/WaveMag));
+
+    if (WaveMag < 0.00001f) {
+        displacementX = 0;
+        displacementZ = 0;
+    }
+       
+
+    _HTildeTexture[id.xy] = htilde;
+    _HTildeSlopeXAxisTexture[id.xy] = ComplexMultiplication(htilde, float2(0, WaveVector.x)); //Multiplying with iKx
+    _HTildeSlopeZAxisTexture[id.xy] = ComplexMultiplication(htilde, float2(0, WaveVector.y)); //Multiplying with iKy
+    _HTildeSlopeDisplacementXAxisTexture[id.xy] = displacementX;
+    _HTildeSlopeDisplacementZAxisTexture[id.xy] = displacementZ;
+}
+
+
+float2 ComplexExp(float2 a) {
+    return float2(cos(a.y), sin(a.y) * exp(a.x));
+}
+
+
+[numthreads(1, 8, 1)]
+void CS_PreComputeTwiddleFactorsAndInputIndices(uint3 id : SV_DISPATCHTHREADID) {
+    const int _N = _Resolution;
+    uint b = _N >> (id.x + 1);
+    float2 mult = 2 * PI * float2(0.0f, 1.0f) / _N;
+    uint i = (2 * b * (id.y / b) + id.y % b) % _N;
+    float2 twiddle = ComplexExp(-mult * ((id.y / b) * b));
+    _PrecomputeBuffer[id.xy] = float4(twiddle, i, i + b);
+    _PrecomputeBuffer[uint2(id.x, id.y + _N / 2)] = float4(-twiddle, i, i + b);
+}
+
+[numthreads(8,8,1)]
+void CS_HorizontalStepInverseFFT(uint3 id : SV_DISPATCHTHREADID) {
+    float4 data = _PrecomputedData[uint2(_Step, id.x)];
+
+    uint2 inputsIndices = (uint2)data.ba;
+
+    float2 x = 0.0f;
+    float2 y = 0.0f;
+
+    if (_Swap) {
+        x = _Buffer0[uint2(inputsIndices.x, id.y)].rg;
+        y = _Buffer0[uint2(inputsIndices.y, id.y)].rg;
+    } else {
+        x = _Buffer1[uint2(inputsIndices.x, id.y)].rg;
+        y = _Buffer1[uint2(inputsIndices.y, id.y)].rg;
+    }
+
+    float2 output = x + ComplexMultiplication(float2(data.r, -data.g), y);
+
+    if (_Swap)
+        _Buffer1[id.xy] = float4(output, 0, 0);
+    else
+        _Buffer0[id.xy] = float4(output, 0, 0);
+}
+
+
+[numthreads(8,8,1)]
+void CS_VerticalStepInverseFFT(uint3 id : SV_DISPATCHTHREADID) {
+    float4 data = _PrecomputedData[uint2(_Step, id.y)];
+
+    uint2 inputsIndices = (uint2)data.ba;
+
+    float2 x = 0.0f;
+    float2 y = 0.0f;
+
+    if (_Swap) {
+        x = _Buffer0[uint2(id.x, inputsIndices.x)].rg;
+        y = _Buffer0[uint2(id.x, inputsIndices.y)].rg;
+    } else {
+        x = _Buffer1[uint2(id.x, inputsIndices.x)].rg;
+        y = _Buffer1[uint2(id.x, inputsIndices.y)].rg;
+    }
+
+    float2 output = x + ComplexMultiplication(float2(data.r, -data.g), y);
+
+    if (_Swap)
+        _Buffer1[id.xy] = float4(output, 0, 0);
+    else
+        _Buffer0[id.xy] = float4(output, 0, 0);
+}
+
+[numthreads(8, 8, 1)]
+void CS_PermuteBuffer(uint3 id : SV_DISPATCHTHREADID) {
+    _Buffer0[id.xy] = _Buffer0[id.xy] * (1.0f - 2.0f * ((id.x + id.y) % 2));
+}
+
+[numthreads(8, 8, 1)]
+void CS_AssembleHeightAndNormalMaps(uint3 id: SV_DISPATCHTHREADID) {
+    float2 htilde = _HTildeTexture[id.xy];
+    float2 slopeX = _HTildeSlopeXAxisTexture[id.xy] * _NormalStrength;
+    float2 slopeZ = _HTildeSlopeZAxisTexture[id.xy] * _NormalStrength;
+    float2 displacementX = _HTildeSlopeDisplacementXAxisTexture[id.xy];
+    float2 displacementZ = _HTildeSlopeDisplacementZAxisTexture[id.xy];
+
+    _HeightMap[id.xy] = float4(htilde.x, displacementX.x * _MovementLambda.x, displacementZ.x * _MovementLambda.y, 0);
+    _NormalMap[id.xy] = float4(normalize(float3(-slopeX.x, 1.0f, -slopeZ.x)), 0.0f);
 }

@@ -20,15 +20,34 @@ public class PhillipsSpectrum : MonoBehaviour
 
     // Start is called before the first frame update
     public ComputeShader fftComputeShader;
+
     public GameObject initialSpectrumDebugQuad;
     public GameObject updatedSpectrumDebugQuad;
     public GameObject heightMapDebugQuad;
     public GameObject normalMapDebugQuad;
 
+
+    public GameObject HTildeDebugQuad;
+    public GameObject HTildeSlopeXAxisDebugQuad;
+    public GameObject HTildeSlopeZAxisDebugQuad;
+    public GameObject HTildeSlopeDisplacementXAxisDebugQuad;
+    public GameObject HTildeSlopeDisplacementZAxisDebugQuad;
+    public GameObject SwapDebugQuad;
+    public GameObject TwiddleFactorDebugQuad;
+
     private RenderTexture initialSpectrumTexture;
     private RenderTexture updatedSpectrumTexture;
     private RenderTexture heightMapTexture;
     private RenderTexture normalMapTexture;
+
+    private RenderTexture HTildeTexture;
+    private RenderTexture HTildeSlopeXAxisTexture;
+    private RenderTexture HTildeSlopeZAxisTexture;
+    private RenderTexture HTildeSlopeDisplacementXAxisTexture;
+    private RenderTexture HTildeSlopeDisplacementZAxisTexture;
+    private RenderTexture SwapTexture;
+    private RenderTexture TwiddleFactorTexture;
+
 
 
     public float _Wind_DirX = 1.0f;
@@ -48,13 +67,27 @@ public class PhillipsSpectrum : MonoBehaviour
     [Range(0, 100)]
     public int _Seed = 0;
     public Vector2 _MovementLambda = new Vector2(-1.0f,-1.0f);
+    [Range(0.0f, 5.0f)]
+    public float _NormalStrength = 1;
+
+    public bool useFFT = true;
+
     public bool UpdateInitialSpectrum = false;
 
 
-    private int threadGroupsX, threadGroupsY;
+    private int logN, threadGroupsX, threadGroupsY;
+
     private int CalculateInitialSpectrumKernelIndex;
-    private int UpdateSpectrumKernelIndex;
-    private int HeightMapKernelIndex;
+    private int UpdateSpectrumForDFTKernelIndex;
+    private int HeightMapDFTKernelIndex;
+    private int UpdateSpectrumForFFTKernelIndex;
+    private int PreComputeTwiddleFactorsAndInputIndicesKernelIndex;
+    private int HorizontalStepInverseFFTKernelIndex;
+    private int VerticalStepInverseFFTKernelIndex;
+    private int PermuteBufferKernelIndex;
+    private int AssembleHeightAndNormalMapsKernelIndex;
+
+
 
     private void OnEnable() {
 
@@ -63,7 +96,7 @@ public class PhillipsSpectrum : MonoBehaviour
         threadGroupsX = Mathf.CeilToInt(_Resolution / 8.0f);
         threadGroupsY = Mathf.CeilToInt(_Resolution / 8.0f);
 
-        initialSpectrumTexture = new RenderTexture(_Resolution, _Resolution, 0, RenderTextureFormat.ARGB64, RenderTextureReadWrite.Linear);
+        initialSpectrumTexture = new RenderTexture(_Resolution, _Resolution, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
         initialSpectrumTexture.enableRandomWrite = true;
         initialSpectrumTexture.Create();
 
@@ -71,19 +104,44 @@ public class PhillipsSpectrum : MonoBehaviour
         updatedSpectrumTexture.enableRandomWrite = true;
         updatedSpectrumTexture.Create();
 
-        heightMapTexture = new RenderTexture(_Resolution, _Resolution, 0, RenderTextureFormat.RHalf, RenderTextureReadWrite.Linear);
+        heightMapTexture = new RenderTexture(_Resolution, _Resolution, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
         heightMapTexture.enableRandomWrite = true;
         heightMapTexture.Create();
 
-        normalMapTexture = new RenderTexture(_Resolution, _Resolution, 0, RenderTextureFormat.RHalf, RenderTextureReadWrite.Linear);
+        normalMapTexture = new RenderTexture(_Resolution, _Resolution, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
         normalMapTexture.enableRandomWrite = true;
         normalMapTexture.Create();
 
-        
+        HTildeTexture = new RenderTexture(_Resolution, _Resolution, 0, RenderTextureFormat.RGHalf, RenderTextureReadWrite.Linear);
+        HTildeTexture.enableRandomWrite = true;
+        HTildeTexture.Create();
+        HTildeSlopeXAxisTexture = new RenderTexture(_Resolution, _Resolution, 0, RenderTextureFormat.RGHalf, RenderTextureReadWrite.Linear);
+        HTildeSlopeXAxisTexture.enableRandomWrite = true;
+        HTildeSlopeXAxisTexture.Create();
+        HTildeSlopeZAxisTexture = new RenderTexture(_Resolution, _Resolution, 0, RenderTextureFormat.RGHalf, RenderTextureReadWrite.Linear);
+        HTildeSlopeZAxisTexture.enableRandomWrite = true;
+        HTildeSlopeZAxisTexture.Create();
+        HTildeSlopeDisplacementXAxisTexture = new RenderTexture(_Resolution, _Resolution, 0, RenderTextureFormat.RGHalf, RenderTextureReadWrite.Linear);
+        HTildeSlopeDisplacementXAxisTexture.enableRandomWrite = true;
+        HTildeSlopeDisplacementXAxisTexture.Create();
+        HTildeSlopeDisplacementZAxisTexture = new RenderTexture(_Resolution, _Resolution, 0, RenderTextureFormat.RGHalf, RenderTextureReadWrite.Linear);
+        HTildeSlopeDisplacementZAxisTexture.enableRandomWrite = true;
+        HTildeSlopeDisplacementZAxisTexture.Create();
+
+        SwapTexture = new RenderTexture(_Resolution, _Resolution, 0, RenderTextureFormat.RGHalf, RenderTextureReadWrite.Linear);
+        SwapTexture.enableRandomWrite = true;
+        SwapTexture.Create();
+
 
         CalculateInitialSpectrumKernelIndex = fftComputeShader.FindKernel("CS_CalculateInitialSpectrum");
-        UpdateSpectrumKernelIndex = fftComputeShader.FindKernel("CS_UpdateSpectrum");
-        HeightMapKernelIndex = fftComputeShader.FindKernel("CS_ComputeHeightMap");
+        UpdateSpectrumForDFTKernelIndex = fftComputeShader.FindKernel("CS_UpdateSpectrumForDFT");
+        HeightMapDFTKernelIndex = fftComputeShader.FindKernel("CS_HeightMapDFT");
+        UpdateSpectrumForFFTKernelIndex = fftComputeShader.FindKernel("CS_UpdateSpectrumForFFT");
+        PreComputeTwiddleFactorsAndInputIndicesKernelIndex = fftComputeShader.FindKernel("CS_PreComputeTwiddleFactorsAndInputIndices");
+        HorizontalStepInverseFFTKernelIndex = fftComputeShader.FindKernel("CS_HorizontalStepInverseFFT");
+        VerticalStepInverseFFTKernelIndex = fftComputeShader.FindKernel("CS_VerticalStepInverseFFT");
+        PermuteBufferKernelIndex = fftComputeShader.FindKernel("CS_PermuteBuffer");
+        AssembleHeightAndNormalMapsKernelIndex = fftComputeShader.FindKernel("CS_AssembleHeightAndNormalMaps");
 
 
         UpdateInitalSpectrumTexture();
@@ -101,7 +159,7 @@ public class PhillipsSpectrum : MonoBehaviour
         fftComputeShader.SetFloat("_Damping", _Damping / 100000);
         fftComputeShader.SetInt("_Seed", _Seed);
         fftComputeShader.SetVector("_MovementLambda", _MovementLambda);
-
+        fftComputeShader.SetFloat("_NormalStrength", _NormalStrength);
 
 
         fftComputeShader.SetTexture(CalculateInitialSpectrumKernelIndex, "_InitialSpectrumTexture", initialSpectrumTexture);
@@ -109,7 +167,51 @@ public class PhillipsSpectrum : MonoBehaviour
 
         Material debugMat = initialSpectrumDebugQuad.GetComponent<Renderer>().material;
         debugMat.SetTexture("_DebugTexture", initialSpectrumTexture);
+
+        logN = (int)Mathf.Log(_Resolution, 2);
+
+
+        TwiddleFactorTexture = new RenderTexture(logN, _Resolution, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear);
+        TwiddleFactorTexture.enableRandomWrite = true;
+        TwiddleFactorTexture.Create();
+
+        fftComputeShader.SetTexture(PreComputeTwiddleFactorsAndInputIndicesKernelIndex, "_PrecomputeBuffer", TwiddleFactorTexture);
+        fftComputeShader.Dispatch(PreComputeTwiddleFactorsAndInputIndicesKernelIndex, logN, (_Resolution / 2) / 8, 1);
+
+        Material debugMat2 = TwiddleFactorDebugQuad.GetComponent<Renderer>().material;
+        debugMat2.SetTexture("_DebugTexture", TwiddleFactorTexture);
     }
+
+    void InverseFFT(RenderTexture spectrumTex) {
+
+        bool swap = false;
+
+        fftComputeShader.SetTexture(HorizontalStepInverseFFTKernelIndex, "_PrecomputedData", TwiddleFactorTexture);
+        fftComputeShader.SetTexture(HorizontalStepInverseFFTKernelIndex, "_Buffer0", spectrumTex);
+        fftComputeShader.SetTexture(HorizontalStepInverseFFTKernelIndex, "_Buffer1", SwapTexture);
+        for (int i = 0; i < logN; ++i) {
+            swap = !swap;
+            fftComputeShader.SetInt("_Step", i);
+            fftComputeShader.SetBool("_Swap", swap);
+            fftComputeShader.Dispatch(HorizontalStepInverseFFTKernelIndex, threadGroupsX, threadGroupsY, 1);
+        }
+
+        fftComputeShader.SetTexture(VerticalStepInverseFFTKernelIndex, "_PrecomputedData", TwiddleFactorTexture);
+        fftComputeShader.SetTexture(VerticalStepInverseFFTKernelIndex, "_Buffer0", spectrumTex);
+        fftComputeShader.SetTexture(VerticalStepInverseFFTKernelIndex, "_Buffer1", SwapTexture);
+        for (int i = 0; i < logN; ++i) {
+            swap = !swap;
+            fftComputeShader.SetInt("_Step", i);
+            fftComputeShader.SetBool("_Swap", swap);
+            fftComputeShader.Dispatch(VerticalStepInverseFFTKernelIndex, threadGroupsX, threadGroupsY, 1);
+        }
+
+        if (swap) Graphics.Blit(SwapTexture, spectrumTex);
+
+        fftComputeShader.SetTexture(PermuteBufferKernelIndex, "_Buffer0", spectrumTex);
+        fftComputeShader.Dispatch(PermuteBufferKernelIndex, threadGroupsX, threadGroupsY, 1);
+    }
+
 
     void UpdateSpectrumTexture() {
         fftComputeShader.SetInt("_Resolution", _Resolution);
@@ -120,19 +222,63 @@ public class PhillipsSpectrum : MonoBehaviour
         fftComputeShader.SetFloat("_Damping", _Damping / 100000);
         fftComputeShader.SetInt("_Seed", _Seed);
         fftComputeShader.SetVector("_MovementLambda", _MovementLambda);
+        fftComputeShader.SetFloat("_NormalStrength", _NormalStrength);
+        if (!useFFT) {
+            fftComputeShader.SetTexture(UpdateSpectrumForDFTKernelIndex, "_InitialSpectrumTexture", initialSpectrumTexture);
+            fftComputeShader.SetTexture(UpdateSpectrumForDFTKernelIndex, "_UpdatedSpectrumTexture", updatedSpectrumTexture);
+            fftComputeShader.Dispatch(UpdateSpectrumForDFTKernelIndex, threadGroupsX, threadGroupsY, 1);
 
-        fftComputeShader.SetTexture(UpdateSpectrumKernelIndex, "_InitialSpectrumTexture", initialSpectrumTexture);
-        fftComputeShader.SetTexture(UpdateSpectrumKernelIndex, "_UpdatedSpectrumTexture", updatedSpectrumTexture);
-        fftComputeShader.Dispatch(UpdateSpectrumKernelIndex, threadGroupsX, threadGroupsY, 1);
+            Material debugMat = updatedSpectrumDebugQuad.GetComponent<Renderer>().material;
+            debugMat.SetTexture("_DebugTexture", updatedSpectrumTexture);
 
-        fftComputeShader.SetTexture(HeightMapKernelIndex, "_UpdatedSpectrumTexture", updatedSpectrumTexture);
-        fftComputeShader.SetTexture(HeightMapKernelIndex, "_HeightMap", heightMapTexture);
-        fftComputeShader.SetTexture(HeightMapKernelIndex, "_NormalMap", normalMapTexture);
-        fftComputeShader.Dispatch(HeightMapKernelIndex, threadGroupsX, threadGroupsY, 1);
+            fftComputeShader.SetTexture(HeightMapDFTKernelIndex, "_UpdatedSpectrumTexture", updatedSpectrumTexture);
+            fftComputeShader.SetTexture(HeightMapDFTKernelIndex, "_HeightMap", heightMapTexture);
+            fftComputeShader.SetTexture(HeightMapDFTKernelIndex, "_NormalMap", normalMapTexture);
+            fftComputeShader.Dispatch(HeightMapDFTKernelIndex, threadGroupsX, threadGroupsY, 1);
+        } else {
+            fftComputeShader.SetTexture(UpdateSpectrumForFFTKernelIndex, "_InitialSpectrumTexture", initialSpectrumTexture);
+            fftComputeShader.SetTexture(UpdateSpectrumForFFTKernelIndex, "_HTildeTexture", HTildeTexture);
+            fftComputeShader.SetTexture(UpdateSpectrumForFFTKernelIndex, "_HTildeSlopeXAxisTexture", HTildeSlopeXAxisTexture);
+            fftComputeShader.SetTexture(UpdateSpectrumForFFTKernelIndex, "_HTildeSlopeZAxisTexture", HTildeSlopeZAxisTexture);
+            fftComputeShader.SetTexture(UpdateSpectrumForFFTKernelIndex, "_HTildeSlopeDisplacementXAxisTexture", HTildeSlopeDisplacementXAxisTexture);
+            fftComputeShader.SetTexture(UpdateSpectrumForFFTKernelIndex, "_HTildeSlopeDisplacementZAxisTexture", HTildeSlopeDisplacementZAxisTexture);
+            fftComputeShader.Dispatch(UpdateSpectrumForFFTKernelIndex, threadGroupsX, threadGroupsY, 1);
+
+
+
+            Material debugMat_1 = HTildeDebugQuad.GetComponent<Renderer>().material;
+            debugMat_1.SetTexture("_DebugTexture", HTildeTexture);
+
+            Material debugMat_2 = HTildeSlopeXAxisDebugQuad.GetComponent<Renderer>().material;
+            debugMat_2.SetTexture("_DebugTexture", HTildeSlopeXAxisTexture);
+
+            Material debugMat_3 = HTildeSlopeZAxisDebugQuad.GetComponent<Renderer>().material;
+            debugMat_3.SetTexture("_DebugTexture", HTildeSlopeZAxisTexture);
+
+            Material debugMat_4 = HTildeSlopeDisplacementXAxisDebugQuad.GetComponent<Renderer>().material;
+            debugMat_4.SetTexture("_DebugTexture", HTildeSlopeDisplacementXAxisTexture);
+
+            Material debugMat_5 = HTildeSlopeDisplacementZAxisDebugQuad.GetComponent<Renderer>().material;
+            debugMat_5.SetTexture("_DebugTexture", HTildeSlopeDisplacementZAxisTexture);
+
+            InverseFFT(HTildeTexture);
+            InverseFFT(HTildeSlopeXAxisTexture);
+            InverseFFT(HTildeSlopeZAxisTexture);
+            InverseFFT(HTildeSlopeDisplacementXAxisTexture);
+            InverseFFT(HTildeSlopeDisplacementZAxisTexture);
+
+
+            fftComputeShader.SetTexture(AssembleHeightAndNormalMapsKernelIndex, "_HTildeTexture", HTildeTexture);
+            fftComputeShader.SetTexture(AssembleHeightAndNormalMapsKernelIndex, "_HTildeSlopeXAxisTexture", HTildeSlopeXAxisTexture);
+            fftComputeShader.SetTexture(AssembleHeightAndNormalMapsKernelIndex, "_HTildeSlopeZAxisTexture", HTildeSlopeZAxisTexture);
+            fftComputeShader.SetTexture(AssembleHeightAndNormalMapsKernelIndex, "_HTildeSlopeDisplacementXAxisTexture", HTildeSlopeDisplacementXAxisTexture);
+            fftComputeShader.SetTexture(AssembleHeightAndNormalMapsKernelIndex, "_HTildeSlopeDisplacementZAxisTexture", HTildeSlopeDisplacementZAxisTexture);
+            fftComputeShader.SetTexture(AssembleHeightAndNormalMapsKernelIndex, "_HeightMap", heightMapTexture);
+            fftComputeShader.SetTexture(AssembleHeightAndNormalMapsKernelIndex, "_NormalMap", normalMapTexture);
+            fftComputeShader.Dispatch(AssembleHeightAndNormalMapsKernelIndex, threadGroupsX, threadGroupsY, 1);
+        }
 
         
-        Material debugMat = updatedSpectrumDebugQuad.GetComponent<Renderer>().material;
-        debugMat.SetTexture("_DebugTexture", updatedSpectrumTexture);
 
         Material debugMat2 = heightMapDebugQuad.GetComponent<Renderer>().material;
         debugMat2.SetTexture("_DebugTexture", heightMapTexture);
